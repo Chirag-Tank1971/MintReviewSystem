@@ -1,0 +1,467 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --bg-app: #f8fafc;
+  --text-primary: #0f172a;
+}
+
+.dark {
+  --bg-app: #020617;
+  --text-primary: #f1f5f9;
+}
+
+@theme {
+  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* Numbers use the body face with tabular figures (see .font-mono below); the UI has no code font. */
+  --font-mono: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  --color-slate-750: #243044;
+  --color-slate-850: #172033;
+
+  /* Brand accent: MintReview green. Components use the `indigo-*` utilities for the accent,
+     so the accent is defined here once instead of in every component. */
+  --color-indigo-50: #eef8f3;
+  --color-indigo-100: #d6efe2;
+  --color-indigo-200: #b0dec8;
+  --color-indigo-300: #7fc6a7;
+  --color-indigo-400: #4aa984;
+  --color-indigo-500: #23916b;
+  --color-indigo-600: #12805c;
+  --color-indigo-700: #0b6a4c;
+  --color-indigo-800: #0b553e;
+  --color-indigo-900: #0a4634;
+  --color-indigo-950: #04271d;
+
+  /* No violet / purple / fuchsia in the palette: those utilities render as neutral slate. */
+  --color-violet-50: var(--color-slate-50);
+  --color-violet-100: var(--color-slate-100);
+  --color-violet-200: var(--color-slate-200);
+  --color-violet-300: var(--color-slate-300);
+  --color-violet-400: var(--color-slate-400);
+  --color-violet-500: var(--color-slate-500);
+  --color-violet-600: var(--color-slate-600);
+  --color-violet-700: var(--color-slate-700);
+  --color-violet-800: var(--color-slate-800);
+  --color-violet-900: var(--color-slate-900);
+  --color-violet-950: var(--color-slate-950);
+  --color-purple-50: var(--color-slate-50);
+  --color-purple-100: var(--color-slate-100);
+  --color-purple-200: var(--color-slate-200);
+  --color-purple-300: var(--color-slate-300);
+  --color-purple-400: var(--color-slate-400);
+  --color-purple-500: var(--color-slate-500);
+  --color-purple-600: var(--color-slate-600);
+  --color-purple-700: var(--color-slate-700);
+  --color-purple-800: var(--color-slate-800);
+  --color-purple-900: var(--color-slate-900);
+  --color-purple-950: var(--color-slate-950);
+  --color-fuchsia-50: var(--color-slate-50);
+  --color-fuchsia-100: var(--color-slate-100);
+  --color-fuchsia-200: var(--color-slate-200);
+  --color-fuchsia-300: var(--color-slate-300);
+  --color-fuchsia-400: var(--color-slate-400);
+  --color-fuchsia-500: var(--color-slate-500);
+  --color-fuchsia-600: var(--color-slate-600);
+  --color-fuchsia-700: var(--color-slate-700);
+  --color-fuchsia-800: var(--color-slate-800);
+  --color-fuchsia-900: var(--color-slate-900);
+  --color-fuchsia-950: var(--color-slate-950);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--bg-app);
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition: background-color 150ms ease-out, color 150ms ease-out;
+  }
+
+  body.dark {
+    color-scheme: dark;
+  }
+
+  /* Numbers line up in columns wherever they're marked as numeric */
+  .tabular-nums,
+  [data-numeric="true"],
+  .font-mono {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Form controls color contrast safety */
+  input,
+  select,
+  textarea {
+    color: inherit;
+  }
+
+  .dark select,
+  .dark input,
+  .dark textarea {
+    color-scheme: dark;
+  }
+
+  option {
+    color: #0f172a;
+    background-color: #ffffff;
+  }
+
+  .dark option {
+    color: #f1f5f9;
+    background-color: #0f172a;
+  }
+
+  /* Universal table styling safety */
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  th, td {
+    border-color: #e2e8f0;
+  }
+
+  .dark th,
+  .dark td {
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+}
+
+/* ==========================================================================
+   Transitions: opacity & subtle translate only, in response to navigation
+   ========================================================================== */
+
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-page-enter {
+  animation: fadeIn 150ms ease-out both;
+}
+
+/* Indeterminate top loading bar: a single bar slides across while a view is still loading */
+@keyframes pageLoadingSlide {
+  0% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(50%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+.animate-page-loading-slide {
+  animation: pageLoadingSlide 1s ease-in-out infinite;
+}
+
+/* Toast slide-in / slide-out (anchored top-right, so it slides in/out from the right edge) */
+@keyframes toastSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateX(24px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes toastSlideOut {
+  0% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(24px) scale(0.98);
+  }
+}
+
+.animate-toast-in {
+  animation: toastSlideIn 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Duration must match EXIT_ANIMATION_MS in ToastContext.tsx — the toast is removed from
+   state exactly when this animation finishes playing. */
+.animate-toast-out {
+  animation: toastSlideOut 200ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+.animate-fadeIn {
+  animation: fadeIn 150ms ease-out both;
+}
+
+/* Login example card: the rating bar fills left to right once, as if being scored */
+@keyframes loginFill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.login-fill {
+  transform-origin: left;
+  animation: loginFill 360ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+/* Shimmer Loading Effect (Calm neutral) */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.shimmer-effect {
+  position: relative;
+  overflow: hidden;
+}
+
+.shimmer-effect::after {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  transform: translateX(-100%);
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0,
+    rgba(255, 255, 255, 0.3) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: shimmer 1.5s infinite ease-in-out;
+  content: '';
+  pointer-events: none;
+}
+
+.dark .shimmer-effect::after {
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0,
+    rgba(255, 255, 255, 0.04) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+}
+
+/* ==========================================================================
+   MODAL & OVERLAY ANIMATIONS
+   ========================================================================== */
+
+@keyframes modalBackdropFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modalBackdropFadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes modalCardScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes modalCardScaleOut {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+}
+
+@keyframes drawerSlideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes drawerSlideOutRight {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+@keyframes drawerSlideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes drawerSlideOutLeft {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+}
+
+.modal-backdrop-enter {
+  animation: modalBackdropFadeIn 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: opacity;
+}
+
+.modal-backdrop-exit {
+  animation: modalBackdropFadeOut 180ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  will-change: opacity;
+  pointer-events: none;
+}
+
+.modal-card-enter {
+  animation: modalCardScaleIn 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+
+.modal-card-exit {
+  animation: modalCardScaleOut 180ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  will-change: transform, opacity;
+  pointer-events: none;
+}
+
+.drawer-right-enter {
+  animation: drawerSlideInRight 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+
+.drawer-right-exit {
+  animation: drawerSlideOutRight 180ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  will-change: transform, opacity;
+  pointer-events: none;
+}
+
+.drawer-left-enter {
+  animation: drawerSlideInLeft 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+
+.drawer-left-exit {
+  animation: drawerSlideOutLeft 180ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  will-change: transform, opacity;
+  pointer-events: none;
+}
+
+/* Aliases for the Tailwind-animate class names used across existing components */
+.animate-in.fade-in {
+  animation: modalBackdropFadeIn 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-in.fade-in.zoom-in-95,
+.animate-in.zoom-in-95 {
+  animation: modalCardScaleIn 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Accessibility: Honour prefers-reduced-motion by strictly disabling transforms & animations */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+    transform: none !important;
+  }
+
+  .shimmer-effect::after {
+    animation: none !important;
+    display: none !important;
+  }
+}
+
+/* Slim scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 4px 0;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.35);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.55);
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.25);
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.45);
+}
+
+/* Notification bell: one short ring when a new notification arrives */
+@keyframes bellRing {
+  0% { transform: rotate(0); }
+  12% { transform: rotate(16deg); }
+  24% { transform: rotate(-14deg); }
+  36% { transform: rotate(12deg); }
+  48% { transform: rotate(-10deg); }
+  60% { transform: rotate(6deg); }
+  72% { transform: rotate(-4deg); }
+  84% { transform: rotate(2deg); }
+  92% { transform: rotate(-1deg); }
+  100% { transform: rotate(0); }
+}
+
+.animate-bell-ring {
+  transform-origin: top center;
+  animation: bellRing 1.1s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
