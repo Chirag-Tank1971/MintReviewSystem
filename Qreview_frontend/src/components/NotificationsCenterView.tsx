@@ -45,6 +45,9 @@ export const NotificationsCenterView: React.FC<NotificationsCenterViewProps> = (
   const [activeTab, setActiveTab] = useState<MainTab>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [priorityFilter, setPriorityFilter] = useState<'ALL' | 'HIGH' | 'MEDIUM' | 'LOW'>('ALL');
+  const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
+  const MESSAGE_PREVIEW_LENGTH = 160;
+  const MESSAGE_SHOW_MORE_MIN_REMAINDER = 25;
 
   // Email Logs State (for Admins / HR)
   const [emailLogs, setEmailLogs] = useState<any[]>([]);
@@ -869,9 +872,38 @@ export const NotificationsCenterView: React.FC<NotificationsCenterViewProps> = (
                             )}
                           </div>
 
-                          <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed max-w-3xl break-words">
-                            {notif.message}
-                          </p>
+                          {(() => {
+                            const notifKey = notif.id || (notif as any)._id || String(notif.createdAt);
+                            const isExpanded = expandedMessages.has(notifKey);
+                            const isLong =
+                              notif.message.length > MESSAGE_PREVIEW_LENGTH &&
+                              notif.message.length - MESSAGE_PREVIEW_LENGTH >= MESSAGE_SHOW_MORE_MIN_REMAINDER;
+                            const displayMsg = isLong && !isExpanded
+                              ? notif.message.slice(0, MESSAGE_PREVIEW_LENGTH).trimEnd() + '…'
+                              : notif.message;
+                            return (
+                              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed max-w-3xl break-words">
+                                {displayMsg}
+                                {isLong && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setExpandedMessages((prev) => {
+                                        const next = new Set(prev);
+                                        if (isExpanded) next.delete(notifKey);
+                                        else next.add(notifKey);
+                                        return next;
+                                      });
+                                    }}
+                                    className="ml-1 text-indigo-600 dark:text-indigo-400 font-semibold hover:underline cursor-pointer whitespace-nowrap"
+                                  >
+                                    {isExpanded ? 'Show less' : 'Show more'}
+                                  </button>
+                                )}
+                              </p>
+                            );
+                          })()}
+
 
                           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-[11px] text-slate-400 dark:text-slate-500">
                             <span className="flex items-center gap-1 tabular-nums shrink-0">
