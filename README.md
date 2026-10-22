@@ -15,6 +15,10 @@ A modern, full-stack enterprise performance management and annual appraisal plat
   - [Annual Appraisal & Salary Increments](#4-annual-appraisal--salary-increments)
   - [Executive & Department Dashboards](#5-executive--department-dashboards)
   - [AI Performance Narrative Synthesis](#6-ai-performance-narrative-synthesis)
+  - [Sales Champions & Incentive Scheme Engine](#7-sales-champions--incentive-scheme-engine)
+  - [Interactive Notifications Center & Alert Feed](#8-interactive-notifications-center--alert-feed)
+  - [HTML5 Clean Routing Architecture](#9-html5-clean-routing-architecture)
+  - [Production CORS & Multi-Cloud Deployment Gateway](#10-production-cors--multi-cloud-deployment-gateway)
 - [Prerequisites](#-prerequisites)
 - [Quick Start Guide](#-quick-start-guide)
   - [1. Backend Setup](#1-backend-setup)
@@ -74,6 +78,7 @@ Review_system/
 │   │       ├── mastersRoutes.ts     # Employees, departments, designations, review periods
 │   │       ├── reportRoutes.ts      # Tabular report generators & exports
 │   │       ├── auditRoutes.ts       # Compliance & audit trail explorer
+│   │       ├── salesChampsRoutes.ts # Sales targets, incentive schemes, slabs & report locks
 │   │       └── aiAndFeedbackRoutes.ts # Gemini AI narrative generator & 360 kudos
 │   ├── src/types/                   # Shared TypeScript domain contracts
 │   ├── package.json
@@ -82,11 +87,16 @@ Review_system/
 ├── Qreview_frontend/                # React 19 + Vite Frontend Application
 │   ├── src/
 │   │   ├── App.tsx                  # Root application router and shell
+│   │   ├── hooks/
+│   │   │   └── useUrlHashView.ts    # HTML5 clean routing hook (path & popstate sync)
 │   │   ├── components/
 │   │   │   ├── QuarterlyReviewView.tsx      # Reviews table, KRA scoring modals, PIP filters
 │   │   │   ├── AppraisalManagementView.tsx  # Appraisal matrix, increments, letter signing
 │   │   │   ├── PerformanceImprovementPlansView.tsx # PIP tracking, milestones, check-ins
 │   │   │   ├── ManagementDashboardView.tsx  # C-suite analytics, department comparisons
+│   │   │   ├── SalesChampsView.tsx          # Sales champions leaderboard, metrics & attainment
+│   │   │   ├── SalesChampsReportModal.tsx   # Detailed incentive scheme scorecard & export
+│   │   │   ├── NotificationsCenterView.tsx  # Activity feed with Show More/Hide controls
 │   │   │   ├── EmployeeDirectory.tsx        # Employee profiles & organizational hierarchy
 │   │   │   ├── ReviewScoringModal.tsx       # 2-step fast-flow and 4-step governance evaluation
 │   │   │   ├── PipDetailModal.tsx           # PIP plan viewer & check-in logger
@@ -95,9 +105,11 @@ Review_system/
 │   │   │       ├── RoleDashboards.tsx       # Role-specific dashboard layouts
 │   │   │       ├── DashboardKit.tsx         # Reusable stat cards, PeopleCard with PIP alerts
 │   │   │       └── InsightCards.tsx         # Calibration, reviewer backlog & coverage cards
-│   │   ├── context/                         # AuthContext, ToastContext
+│   │   ├── context/                         # AuthContext, ToastContext, ThemeContext, NotificationsContext
 │   │   ├── services/
 │   │   │   └── api.ts                       # Typed HTTP client with token refresh & error handling
+│   │   ├── utils/
+│   │   │   └── salesChampsExport.ts         # Client-side PDF & Excel export generator for champions
 │   │   └── types/                           # Frontend domain models & view state types
 │   ├── package.json
 │   ├── vite.config.ts
@@ -182,6 +194,37 @@ Comprehensive lifecycle management for employees requiring structured performanc
 ### 6. AI Performance Narrative Synthesis
 - Integrated with Google Gemini (`gemini-2.5-flash`) via `@google/genai`.
 - Synthesizes quarterly scores, employee comments, and manager feedback into clear, objective performance summaries and constructive growth recommendations.
+
+---
+
+### 7. Sales Champions & Incentive Scheme Engine
+Dedicated sales performance tracking, milestone recognition, and incentive compensation governance module:
+- **Annual & Quarterly Sales Targets**: Tracks Gross Margin 2 (`gm2TargetCr`) targets and achievements across financial years.
+- **Incentive Slabs & Attainment Tiers**: Tiered reward matrices (e.g. 80%–99%, 100%–119%, 120%+) with calculated payout percentages and Mint Value recognition criteria.
+- **Governance Lifecycle (`DRAFT` $\rightarrow$ `REVIEWED` $\rightarrow$ `LOCKED`)**: HR and Super Admins draft, calibrate, and lock reports; employees gain transparent read-only access once officially locked.
+- **Client-Side Multi-Format Export**: Generates professional branded PDF achievement certificates via `jspdf`/`html2canvas` and spreadsheet reports via SheetJS `xlsx` (`salesChampsExport.ts`).
+
+---
+
+### 8. Interactive Notifications Center & Alert Feed
+- **Interactive Activity Feed (`NotificationsCenterView.tsx`)**: Centralized inbox tracking appraisal releases, review returns, SLA deadlines, PIP check-ins, and system notices.
+- **"Show More" / "Hide" Expandable Details**: Dynamic toggle controls allowing users to expand verbose feedback, goal ratings, and audit remarks without cluttering the list view.
+- **Unread Count & Audio/Visual Bell**: Instant unread badge indicators with one-click "Mark All as Read" and category filtering (Reviews, Appraisals, PIP, System).
+
+---
+
+### 9. HTML5 Clean Routing Architecture
+- **Path-Based Navigation**: Modern URL schema (`/dashboard`, `/reviews`, `/appraisals`, `/sales_champs`, `/employees`, `/hierarchy`, `/pip`) powered by the HTML5 History API (`pushState`, `replaceState`, `popstate`), completely eliminating hash fragment routing (`#`).
+- **Backward Compatibility**: Automatically catches legacy bookmark hashes (`/#dashboard`) and smoothly elevates them to clean URLs.
+- **Dynamic Role-Based Landing**: Automatically redirects root visits (`/`) to the authenticated user's designated workspace home view.
+- **SPA Fallback Ready**: Configured for Vite development and seamless production deployment on Express and Nginx (`try_files $uri $uri/ /index.html;`).
+
+---
+
+### 10. Production CORS & Multi-Cloud Deployment Gateway
+- **Multi-Environment Origin Authorization**: Dynamic CORS middleware in `server.ts` safely validating production domains, local development ports, and wildcard subdomains.
+- **Vercel Preview Auto-Matching**: Built-in pattern recognition that instantly accommodates dynamic Vercel PR and preview deployment URLs (e.g., `mint-review-system*.vercel.app` and `*chirag-tank1971s-projects.vercel.app`) without requiring manual environment variable reconfiguration on every commit.
+- **Strict Preflight Handling**: Explicit `OPTIONS` preflight middleware routing guaranteeing fast 204 No Content responses across all API endpoints.
 
 ---
 
@@ -329,6 +372,15 @@ VITE_API_BASE_URL=http://localhost:3000
 | `GET /api/management/dashboard` | Executive | Returns C-level department KPIs, workforce risk, and trends |
 | `POST /api/ai/synthesize-review` | AI Synthesis | Generates Gemini AI performance summaries and feedback |
 | `GET /api/audit` | Compliance | Queries immutable ISO-compliant audit trail records |
+| `GET /api/sales-champs` | Sales Champions | Lists sales champion incentive reports with filter by FY and status |
+| `GET /api/sales-champs/employee/:id` | Sales Champions | Retrieves locked incentive report for an employee |
+| `POST /api/sales-champs` | Sales Champions | Creates new sales target and slab scorecard in DRAFT status |
+| `PUT /api/sales-champs/:id` | Sales Champions | Updates target values, incentive slabs, and recognition rules |
+| `POST /api/sales-champs/:id/lock` | Sales Champions | Locks and officially publishes the incentive report |
+| `DELETE /api/sales-champs/:id` | Sales Champions | Deletes draft sales champ report |
+| `GET /api/notifications` | Notifications | Retrieves paginated user notification activity feed |
+| `PUT /api/notifications/:id/read` | Notifications | Marks specific notification as read |
+| `PUT /api/notifications/read-all` | Notifications | Marks all user notifications as read |
 
 ---
 
