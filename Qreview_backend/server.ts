@@ -61,17 +61,14 @@ async function startServer() {
     // 4. Exact match against configured origins
     if (configuredOrigins.includes(cleanOrigin)) return true;
 
-    // 5. Allow localhost / 127.0.0.1 on any port (harmless in production, useful for local
-    //    testing against a production API)
+    // 5. Allow localhost / 127.0.0.1 on any port (harmless in production, useful for local testing)
     if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(cleanOrigin)) {
       return true;
     }
 
-    // 6. Support wildcard subdomain patterns in configuredOrigins (e.g. *.mycompany.com)
-    // Note: blanket trust of any *.vercel.app / *.onrender.com origin was intentionally
-    // removed — those are shared hosting domains anyone can deploy to. Set the exact
-    // production frontend URL(s) in ALLOWED_ORIGINS instead.
-    for (const pattern of configuredOrigins) {
+    // 6. Support wildcard subdomain patterns in configuredOrigins (e.g. *.vercel.app or https://*.vercel.app)
+    for (const rawPattern of configuredOrigins) {
+      const pattern = rawPattern.replace(/^https?:\/\//, '').replace(/\/$/, '');
       if (pattern.startsWith('*.')) {
         const rootDomain = pattern.slice(2);
         try {
@@ -85,25 +82,31 @@ async function startServer() {
       }
     }
 
+    // 7. Auto-allow Vercel preview and production deployments for this application
+    if (/^https:\/\/(mint-review-system.*|.*chirag-tank1971s-projects)\.vercel\.app$/i.test(cleanOrigin)) {
+      return true;
+    }
+
     return false;
   };
 
-  app.use(
-    cors({
-      origin: (origin, callback) => {
-        if (isOriginAllowed(origin || '')) {
-          return callback(null, true);
-        }
-        // Gracefully disallow origin without throwing an unhandled server error
-        return callback(null, false);
-      },
-      credentials: true,
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
-      exposedHeaders: ['Content-Range', 'X-Content-Range'],
-      optionsSuccessStatus: 204,
-    })
-  );
+  const corsMiddleware = cors({
+    origin: (origin, callback) => {
+      if (isOriginAllowed(origin || '')) {
+        return callback(null, true);
+      }
+      // Gracefully disallow origin without throwing an unhandled server error
+      return callback(null, false);
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+    exposedHeaders: ['Content-Range', 'X-Content-Range'],
+    optionsSuccessStatus: 204,
+  });
+
+  app.use(corsMiddleware);
+  app.options('*', corsMiddleware);
 
   // Essential HTTP security headers
   app.use((_req, res, next) => {
