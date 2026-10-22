@@ -230,11 +230,24 @@ export const AppraisalManagementView: React.FC<AppraisalManagementViewProps> = (
   };
 
   // Same rule the cards use to highlight "pending my action"
-  const pendingMyAction = (appr: Appraisal) =>
-    (appr.status === 'PENDING' && (appr.managerId === currentUser?.employeeId || appr.managerId === currentUser?.id)) ||
-    (appr.status === 'MANAGER_RECOMMENDED' && appr.hodId === currentUser?.employeeId) ||
-    (currentUser?.role === 'HR' && appr.status === 'HOD_CALIBRATED') ||
-    (currentUser?.role === 'SUPER_ADMIN' && appr.status === 'HR_APPROVED');
+  const pendingMyAction = (appr: Appraisal) => {
+    const isAssignedMgr =
+      appr.managerId === currentUser?.employeeId ||
+      appr.managerId === currentUser?.id ||
+      Boolean(currentUser?.employeeId && appr.managerIds?.includes(currentUser.employeeId)) ||
+      Boolean(currentUser?.id && appr.managerIds?.includes(currentUser.id));
+
+    const alreadySubmittedByMe =
+      (currentUser?.employeeId && Boolean(appr.managerRecommendations?.[currentUser.employeeId])) ||
+      (currentUser?.id && Boolean(appr.managerRecommendations?.[currentUser.id]));
+
+    return (
+      (appr.status === 'PENDING' && isAssignedMgr && !alreadySubmittedByMe) ||
+      (appr.status === 'MANAGER_RECOMMENDED' && appr.hodId === currentUser?.employeeId) ||
+      (currentUser?.role === 'HR' && appr.status === 'HOD_CALIBRATED') ||
+      (currentUser?.role === 'SUPER_ADMIN' && appr.status === 'HR_APPROVED')
+    );
+  };
 
   const matchesQuickView = (appr: Appraisal, view: AppraisalQuickView): boolean => {
     switch (view) {

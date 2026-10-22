@@ -151,7 +151,7 @@ export const BatchGenerateReviewsModal: React.FC<BatchGenerateReviewsModalProps>
     <div
       className={`fixed inset-0 z-[9990] flex items-center justify-center bg-slate-900/50 dark:bg-black/70 backdrop-blur-xs p-4 ${backdropClass}`}
     >
-      <div className={`bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-xl overflow-hidden ${cardClass}`}>
+      <div className={`bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-xl max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden ${cardClass}`}>
         
         {/* HEADER */}
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/80 dark:bg-slate-800/80">
@@ -170,8 +170,8 @@ export const BatchGenerateReviewsModal: React.FC<BatchGenerateReviewsModalProps>
           </button>
         </div>
 
-        <form onSubmit={handleGenerate}>
-          <div className="p-6 space-y-5">
+        <form onSubmit={handleGenerate} className="flex flex-col min-h-0 flex-1 overflow-hidden">
+          <div className="p-6 space-y-5 overflow-y-auto flex-1 min-h-0">
             {/* MESSAGES */}
             {errorMessage && (
               <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-rose-800 dark:text-rose-300 text-xs rounded-lg flex items-center space-x-2">
@@ -298,7 +298,7 @@ export const BatchGenerateReviewsModal: React.FC<BatchGenerateReviewsModalProps>
           </div>
 
           {/* FOOTER */}
-          <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/80 flex items-center justify-end space-x-3">
+          <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/80 flex items-center justify-end space-x-3 shrink-0">
             <button
               type="button"
               onClick={handleClose}

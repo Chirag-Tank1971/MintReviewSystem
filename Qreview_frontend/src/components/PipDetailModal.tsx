@@ -250,7 +250,7 @@ export const PipDetailModal: React.FC<PipDetailModalProps> = ({ plan, currentUse
           </div>
         </div>
 
-        <div className="p-5 space-y-5 overflow-y-auto">
+        <div className="p-5 space-y-5 overflow-y-auto flex-1 min-h-0">
           {/* Summary */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
             <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">

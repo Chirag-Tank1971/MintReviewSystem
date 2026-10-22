@@ -192,11 +192,26 @@ export const Step4FinalReviewSection: React.FC<Step4FinalReviewSectionProps> = (
 
   const hasOverall = strengths || improvements || managerComments || review.hodOverallComments || review.selfStrengths || review.selfImprovements;
 
-  const scores = [
+  const isDualManager = Boolean(review.managerIds && review.managerIds.length > 1);
+  const managerColCount = isDualManager ? (review.managerIds?.length || 2) + 1 : 1;
+  const totalColSpan = (canReturn ? 1 : 0) + 1 + 1 + 1 + managerColCount + 1 + 1 + 1;
+  const scores: Array<{ label: string; value?: number }> = [
     { label: 'Employee (self)', value: review.selfScore },
-    { label: 'Manager', value: managerScore },
-    { label: 'HOD', value: hodScore },
   ];
+  if (isDualManager && review.managerSubmissions) {
+    review.managerIds!.forEach((mId, i) => {
+      const name = review.managerNames?.[i] || `Manager ${i + 1}`;
+      const sub = review.managerSubmissions?.[mId];
+      scores.push({
+        label: `${name}${sub?.submitted ? '' : ' (Pending)'}`,
+        value: sub?.score,
+      });
+    });
+    scores.push({ label: 'Combined Manager', value: managerScore });
+  } else {
+    scores.push({ label: 'Manager', value: managerScore });
+  }
+  scores.push({ label: 'HOD', value: hodScore });
 
   return (
     <div className="space-y-5">
@@ -268,7 +283,29 @@ export const Step4FinalReviewSection: React.FC<Step4FinalReviewSectionProps> = (
                 <th className="px-3 py-2 font-semibold">KRA</th>
                 <th className="px-3 py-2 font-semibold">Weight</th>
                 <th className="px-3 py-2 font-semibold">Employee (self)</th>
-                <th className="px-3 py-2 font-semibold">Manager</th>
+                {isDualManager ? (
+                  <>
+                    {review.managerIds?.map((mId, i) => {
+                      const mName = review.managerNames?.[i] || `Manager ${i + 1}`;
+                      return (
+                        <th key={mId} className="px-3 py-2 font-semibold">
+                          <div className="flex flex-col">
+                            <span className="truncate max-w-[120px]" title={mName}>{mName}</span>
+                            <span className="text-[10px] font-normal text-slate-400 dark:text-slate-500">Mgr {i + 1}</span>
+                          </div>
+                        </th>
+                      );
+                    })}
+                    <th className="px-3 py-2 font-semibold bg-slate-100/50 dark:bg-slate-800/50">
+                      <div className="flex flex-col">
+                        <span>Combined Mgr</span>
+                        <span className="text-[10px] font-normal text-slate-400 dark:text-slate-500">Average</span>
+                      </div>
+                    </th>
+                  </>
+                ) : (
+                  <th className="px-3 py-2 font-semibold">Manager</th>
+                )}
                 <th className="px-3 py-2 font-semibold">HOD</th>
                 <th className="px-3 py-2 font-semibold">Final</th>
                 <th className="px-3 py-2 font-semibold">Manager vs HOD</th>
@@ -322,7 +359,23 @@ export const Step4FinalReviewSection: React.FC<Step4FinalReviewSectionProps> = (
                       </td>
                       <td className="px-3 py-2.5 tabular-nums text-slate-600 dark:text-slate-300">{k.weight}%</td>
                       <td className="px-3 py-2.5"><RatingCell value={k.selfRating} /></td>
-                      <td className="px-3 py-2.5"><RatingCell value={mgr} /></td>
+                      {isDualManager ? (
+                        <>
+                          {review.managerIds?.map((mId) => {
+                            const mRating = k.managerRatings?.[mId]?.rating;
+                            return (
+                              <td key={mId} className="px-3 py-2.5">
+                                <RatingCell value={mRating} />
+                              </td>
+                            );
+                          })}
+                          <td className="px-3 py-2.5 bg-slate-50/50 dark:bg-slate-800/30">
+                            <RatingCell value={mgr} emphasis />
+                          </td>
+                        </>
+                      ) : (
+                        <td className="px-3 py-2.5"><RatingCell value={mgr} /></td>
+                      )}
                       <td className="px-3 py-2.5"><RatingCell value={hod} /></td>
                       <td className="px-3 py-2.5"><RatingCell value={final} emphasis /></td>
                       <td className="px-3 py-2.5">
@@ -340,10 +393,10 @@ export const Step4FinalReviewSection: React.FC<Step4FinalReviewSectionProps> = (
                     <AnimatePresence initial={false}>
                     {isOpen && (
                       <tr key="details" className="bg-slate-50/80 dark:bg-slate-900/40">
-                        <td colSpan={canReturn ? 8 : 7} className="p-0">
+                        <td colSpan={totalColSpan} className="p-0">
                           <m.div variants={accordionVariants} initial="collapsed" animate="expanded" exit="collapsed">
                           <div className="px-4 py-3">
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                          <div className={`grid grid-cols-1 gap-2 ${isDualManager ? "md:grid-cols-2 lg:grid-cols-4" : "md:grid-cols-3"}`}>
                             <DetailColumn
                               title="Employee (self)"
                               rating={k.selfRating}
@@ -351,14 +404,32 @@ export const Step4FinalReviewSection: React.FC<Step4FinalReviewSectionProps> = (
                               achievement={k.selfAchievement}
                               comments={k.selfComments}
                             />
-                            <DetailColumn
-                              title="Manager"
-                              rating={k.rating}
-                              reason={k.ratingJustification}
-                              achievement={k.achievement}
-                              comments={k.comments}
-                              warning={staleWho?.has('MANAGER') ? 'Reason not updated after the rating changed' : undefined}
-                            />
+                            {isDualManager && k.managerRatings ? (
+                              review.managerIds!.map((mId, i) => {
+                                const mName = review.managerNames?.[i] || `Manager ${i + 1}`;
+                                const mRating = k.managerRatings?.[mId];
+                                return (
+                                  <DetailColumn
+                                    key={mId}
+                                    title={`${mName} (Mgr ${i + 1})`}
+                                    rating={mRating?.rating}
+                                    reason={mRating?.ratingJustification}
+                                    achievement={mRating?.achievement}
+                                    comments={mRating?.comments}
+                                    warning={staleWho?.has('MANAGER') ? 'Reason not updated after rating change' : undefined}
+                                  />
+                                );
+                              })
+                            ) : (
+                              <DetailColumn
+                                title="Manager"
+                                rating={k.rating}
+                                reason={k.ratingJustification}
+                                achievement={k.achievement}
+                                comments={k.comments}
+                                warning={staleWho?.has('MANAGER') ? 'Reason not updated after the rating changed' : undefined}
+                              />
+                            )}
                             <DetailColumn
                               title="HOD"
                               rating={k.hodRating}
@@ -409,7 +480,7 @@ export const Step4FinalReviewSection: React.FC<Step4FinalReviewSectionProps> = (
               })}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-6 text-center text-slate-500 dark:text-slate-400">No KRAs where manager and HOD disagree.</td>
+                  <td colSpan={totalColSpan} className="px-4 py-6 text-center text-slate-500 dark:text-slate-400">No KRAs where manager and HOD disagree.</td>
                 </tr>
               )}
             </tbody>
@@ -421,7 +492,7 @@ export const Step4FinalReviewSection: React.FC<Step4FinalReviewSectionProps> = (
       {hasOverall && (
         <div className="rounded-2xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-800/90 p-4 space-y-3 text-xs">
           <h4 className="text-sm font-bold text-slate-900 dark:text-white">Overall comments</h4>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className={`grid grid-cols-1 gap-4 ${isDualManager ? 'md:grid-cols-2 lg:grid-cols-4' : 'md:grid-cols-3'}`}>
             <div className="space-y-1.5">
               <h5 className="font-semibold text-slate-900 dark:text-white">Employee (self)</h5>
               <Field label="Strengths" value={review.selfStrengths} />
@@ -429,13 +500,31 @@ export const Step4FinalReviewSection: React.FC<Step4FinalReviewSectionProps> = (
               <Field label="Obstacles" value={review.selfObstacles} />
               {!review.selfStrengths && !review.selfImprovements && !review.selfObstacles && <p className="text-slate-400">No comments.</p>}
             </div>
-            <div className="space-y-1.5">
-              <h5 className="font-semibold text-slate-900 dark:text-white">Manager</h5>
-              <Field label="Strengths" value={strengths} />
-              <Field label="Development areas" value={improvements} />
-              <Field label="Overall summary" value={managerComments} />
-              {!strengths && !improvements && !managerComments && <p className="text-slate-400">No comments.</p>}
-            </div>
+            {isDualManager && review.managerSubmissions ? (
+              review.managerIds!.map((mId, i) => {
+                const mName = review.managerNames?.[i] || `Manager ${i + 1}`;
+                const sub = review.managerSubmissions?.[mId];
+                return (
+                  <div key={mId} className="space-y-1.5">
+                    <h5 className="font-semibold text-slate-900 dark:text-white">{`${mName} (Mgr ${i + 1})`}</h5>
+                    <Field label="Strengths" value={sub?.strengths} />
+                    <Field label="Development areas" value={sub?.improvements} />
+                    <Field label="Overall summary" value={sub?.managerOverallComments} />
+                    {!sub?.strengths && !sub?.improvements && !sub?.managerOverallComments && (
+                      <p className="text-slate-400">No comments yet.</p>
+                    )}
+                  </div>
+                );
+              })
+            ) : (
+              <div className="space-y-1.5">
+                <h5 className="font-semibold text-slate-900 dark:text-white">Manager</h5>
+                <Field label="Strengths" value={strengths} />
+                <Field label="Development areas" value={improvements} />
+                <Field label="Overall summary" value={managerComments} />
+                {!strengths && !improvements && !managerComments && <p className="text-slate-400">No comments.</p>}
+              </div>
+            )}
             <div className="space-y-1.5">
               <h5 className="font-semibold text-slate-900 dark:text-white">HOD</h5>
               {review.hodOverallComments ? (

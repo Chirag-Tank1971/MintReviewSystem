@@ -20,6 +20,7 @@ import { emailRouter } from './server/routes/emailRoutes.js';
 import { managementRouter } from './server/routes/managementRoutes.js';
 import { pipRouter } from './server/routes/pipRoutes.js';
 import { dashboardRouter } from './server/routes/dashboardRoutes.js';
+import { salesChampsRouter } from './server/routes/salesChampsRoutes.js';
 import { startBackgroundScheduler } from './server/jobs/scheduler.js';
 
 // In production, silence non-critical development logs (console.log, console.info, console.warn)
@@ -215,6 +216,7 @@ async function startServer() {
   app.use('/api', pipRouter);
   app.use('/api', managementRouter);
   app.use('/api', dashboardRouter);
+  app.use('/api', salesChampsRouter);
 
   // Always return standard JSON 404 for any unmatched /api routes
   app.all('/api/*', (_req, res) => {

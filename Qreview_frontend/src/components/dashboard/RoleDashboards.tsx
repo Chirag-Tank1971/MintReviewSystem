@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, ArrowRight, Award, Calendar, ClipboardList, Clock, FileText, Target } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Award, Calendar, ClipboardList, Clock, Download, FileText, Target, Trophy } from 'lucide-react';
 import type {
   DashboardAdminOverview,
   DashboardHodOverview,
@@ -10,6 +10,8 @@ import type {
   PerformanceImprovementPlan,
 } from '../../types';
 import { cn } from '../../utils/cn';
+import { api } from '../../services/api';
+import { downloadChampsPdf } from '../../utils/salesChampsExport';
 import {
   Card,
   DatesCard,
@@ -441,6 +443,97 @@ const ImprovementPlanCard: React.FC<{ plan: PerformanceImprovementPlan; onNaviga
   );
 };
 
+export const EmployeeChampsCard: React.FC<{ employeeId?: string; onNavigate: Navigate; className?: string }> = ({
+  employeeId,
+  onNavigate,
+  className,
+}) => {
+  const [report, setReport] = React.useState<any | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [downloading, setDownloading] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!employeeId) {
+      setLoading(false);
+      return;
+    }
+    api
+      .getMySalesChampsReports(employeeId)
+      .then((docs) => {
+        if (Array.isArray(docs) && docs.length > 0) {
+          setReport(docs[0]);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [employeeId]);
+
+  if (loading || !report) return null;
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      await downloadChampsPdf({
+        employeeName: report.employeeName,
+        financialYear: report.financialYear,
+        fyDateRange: report.fyDateRange,
+        publishedDate: report.publishedDate,
+        gm2TargetCr: report.gm2TargetCr,
+        slabs: report.slabs,
+        mintValue: report.mintValue,
+        incentiveSchemeName: report.incentiveSchemeName,
+        rules: report.rules,
+        customRuleText: report.customRuleText,
+      });
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <Card
+      title={`MINT Champs — ${report.financialYear}`}
+      subtitle="Your officially approved and locked sales incentive scheme"
+      className={cn(
+        'border-amber-200 dark:border-amber-900/50 bg-gradient-to-r from-amber-50/60 via-white to-amber-50/30 dark:from-amber-950/20 dark:via-slate-900 dark:to-slate-900',
+        className
+      )}
+    >
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-1">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0">
+            <Trophy className="w-5 h-5" />
+          </div>
+          <div>
+            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">GM2 Bottom Line Target</span>
+            <p className="text-xl font-black text-amber-700 dark:text-amber-400">
+              ₹{report.gm2TargetCr}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => onNavigate('sales_champs')}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750 cursor-pointer shadow-2xs"
+          >
+            View scheme <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            disabled={downloading}
+            onClick={handleDownload}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer disabled:opacity-50 shadow-2xs"
+          >
+            <Download className="w-3.5 h-3.5" /> {downloading ? 'Downloading…' : 'PDF'}
+          </button>
+        </div>
+      </div>
+    </Card>
+  );
+};
+
 export const EmployeeDashboard: React.FC<{ data: DashboardSummary; me: DashboardMyReview; onNavigate: Navigate; onOpenLetter: () => void }> = ({
   data,
   me,
@@ -451,6 +544,7 @@ export const EmployeeDashboard: React.FC<{ data: DashboardSummary; me: Dashboard
     {me.activePip && (me.activePip.status === 'ACTIVE' || me.activePip.status === 'EXTENDED') && (
       <ImprovementPlanCard plan={me.activePip} onNavigate={onNavigate} />
     )}
+    <EmployeeChampsCard employeeId={me.employee?.id} onNavigate={onNavigate} />
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
       <MyReviewCard me={me} data={data} onNavigate={onNavigate} className="lg:col-span-2" />
       <MyScoreCard me={me} />
@@ -864,6 +958,7 @@ export const AdminDashboard: React.FC<{ data: DashboardSummary; admin: Dashboard
             value: String(admin.activeUsers),
             suffix: `/ ${admin.totalUsers}`,
             hint: 'active accounts',
+            onClick: () => onNavigate('employees'),
           },
           {
             label: 'Review cycle completion',

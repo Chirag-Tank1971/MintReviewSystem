@@ -13,6 +13,7 @@ import {
 } from '../validation.js';
 import {
   Appraisal,
+  AppraisalStatus,
   AppraisalSummaryStats,
   Employee,
   Department,
@@ -73,6 +74,8 @@ appraisalRouter.get(
           (e) =>
             e.managerId === req.user?.employeeId ||
             e.managerId === req.user?.id ||
+            Boolean(e.managerIds?.includes(req.user?.employeeId ?? '')) ||
+            Boolean(e.managerIds?.includes(req.user?.id ?? '')) ||
             e.hodId === req.user?.employeeId ||
             (req.user?.role === 'HOD' && deptId && e.departmentId === deptId)
         );
@@ -188,9 +191,11 @@ appraisalRouter.get('/appraisals', async (req: AuthenticatedRequest, res: Respon
         const userDeptName = req.employeeProfile?.departmentName?.toLowerCase();
         return (
           a.managerId === user.employeeId ||
+          Boolean(a.managerIds?.includes(user.employeeId)) ||
           a.hodId === user.employeeId ||
           a.employeeId === user.employeeId ||
           empRecord?.managerId === user.employeeId ||
+          Boolean(empRecord?.managerIds?.includes(user.employeeId ?? '')) ||
           empRecord?.hodId === user.employeeId ||
           (user.email && empRecord?.managerName?.toLowerCase() === user.name.toLowerCase()) ||
           (isHodRole && userDeptId && a.departmentId === userDeptId) ||
@@ -205,7 +210,10 @@ appraisalRouter.get('/appraisals', async (req: AuthenticatedRequest, res: Respon
       appraisals = appraisals.filter((a) => {
         const empRecord = empMap.get(a.employeeId);
         return (
-          (a.managerId === user.employeeId || empRecord?.managerId === user.employeeId) &&
+          (a.managerId === user.employeeId ||
+            Boolean(a.managerIds?.includes(user.employeeId)) ||
+            empRecord?.managerId === user.employeeId ||
+            Boolean(empRecord?.managerIds?.includes(user.employeeId ?? ''))) &&
           a.employeeId !== user.employeeId
         );
       });
@@ -233,7 +241,7 @@ appraisalRouter.get('/appraisals', async (req: AuthenticatedRequest, res: Respon
       );
     }
     if (managerId) {
-      appraisals = appraisals.filter((a) => a.managerId === managerId);
+      appraisals = appraisals.filter((a) => a.managerId === managerId || Boolean(a.managerIds?.includes(managerId as string)));
     }
     if (status && status !== 'ALL') {
       appraisals = appraisals.filter((a) => a.status === status);
@@ -322,9 +330,11 @@ appraisalRouter.get(
           const userDeptName = req.employeeProfile?.departmentName?.toLowerCase();
           return (
             a.managerId === user?.employeeId ||
+            Boolean(a.managerIds?.includes(user?.employeeId ?? '')) ||
             a.hodId === user?.employeeId ||
             a.employeeId === user?.employeeId ||
             empRecord?.managerId === user?.employeeId ||
+            Boolean(empRecord?.managerIds?.includes(user?.employeeId ?? '')) ||
             empRecord?.hodId === user?.employeeId ||
             (isHodRole && userDeptId && a.departmentId === userDeptId) ||
             (isHodRole && userDeptId && empRecord?.departmentId === userDeptId) ||
@@ -913,6 +923,9 @@ appraisalRouter.post(
           designationName: emp.designationName || 'Specialist',
           managerId: emp.managerId,
           managerName: emp.managerName,
+          managerIds: emp.managerIds || (emp.managerId ? [emp.managerId] : []),
+          managerNames: emp.managerNames || (emp.managerName ? [emp.managerName] : []),
+          reportsDirectlyToHod: emp.reportsDirectlyToHod,
           hodId: emp.hodId,
           hodName: emp.hodName,
           cycleId: cycle.id,
@@ -1074,28 +1087,41 @@ appraisalRouter.put(
         return res.status(400).json({ error: 'Cannot submit recommendation: Employee is currently on an active performance improvement plan and ineligible for annual increment/promotion until it resolves.' });
       }
 
-      // Ownership check: caller must actually be the assigned reporting manager for this
-      // employee (regardless of their account's stored role label — a person can hold the
-      // manager relationship on a record even if their account role is HOD/MANAGEMENT/etc).
-      if (
-        user?.role !== 'SUPER_ADMIN' &&
-        appraisal.managerId !== user?.employeeId &&
-        appraisal.managerId !== user?.id
-      ) {
+      // Ownership check: caller must actually be the assigned reporting manager for this employee
+      const isAssignedManager =
+        appraisal.managerId === user?.employeeId ||
+        appraisal.managerId === user?.id ||
+        Boolean(user?.employeeId && appraisal.managerIds?.includes(user.employeeId)) ||
+        Boolean(user?.id && appraisal.managerIds?.includes(user.id));
+
+      if (user?.role !== 'SUPER_ADMIN' && !isAssignedManager) {
         return res.status(403).json({ error: 'Unauthorized: You can only submit recommendations for your assigned direct reports.' });
       }
 
-      const currentCtc = appraisal.currentCtc;
-      const incPercent = Number(suggestedIncrementPercent) || appraisal.suggestedIncrementMin || 10;
-      const incrementAmount = Math.round((currentCtc * incPercent) / 100);
-      const revisedCtc = currentCtc + incrementAmount;
+      const assignedManagerIds: string[] =
+        appraisal.managerIds && appraisal.managerIds.length > 0
+          ? appraisal.managerIds
+          : (appraisal.managerId ? [appraisal.managerId] : []);
+      const isDualManager = assignedManagerIds.length > 1;
+      const activeManagerId =
+        user?.employeeId && assignedManagerIds.includes(user.employeeId)
+          ? user.employeeId
+          : user?.id && assignedManagerIds.includes(user.id)
+          ? user.id
+          : assignedManagerIds[0] || user?.employeeId || user?.id || appraisal.managerId;
+
+      const currentCtc = appraisal.currentCtc || 0;
+      let incPercent = Number(suggestedIncrementPercent) || appraisal.suggestedIncrementMin || 10;
+      let incrementAmount = Math.round((currentCtc * incPercent) / 100);
+      let revisedCtc = currentCtc + incrementAmount;
 
       const budgetError = await checkDepartmentBudget(appraisal, incrementAmount);
       if (budgetError) {
         return res.status(400).json({ error: budgetError, code: 'BUDGET_CAP_EXCEEDED' });
       }
 
-      const managerRecommendation = {
+      const managerRecommendations = { ...(appraisal.managerRecommendations || {}) };
+      const thisRec = {
         suggestedIncrementPercent: incPercent,
         promotionRecommended: Boolean(promotionRecommended),
         promotionDesignationId: promotionDesignationId || undefined,
@@ -1106,28 +1132,116 @@ appraisalRouter.put(
         recommendedByName: user?.name || 'Reporting Manager',
         recommendedAt: new Date().toISOString(),
       };
+      if (activeManagerId) {
+        managerRecommendations[activeManagerId] = thisRec;
+      }
+
+      const allManagersSubmitted =
+        !isDualManager || assignedManagerIds.every((mId) => managerRecommendations[mId]);
+
+      let finalPromoRecommended = Boolean(promotionRecommended);
+      let finalPromoDesigId = promotionDesignationId || undefined;
+      let finalPromoDesigName = promotionDesignationName || undefined;
+
+      if (isDualManager && allManagersSubmitted) {
+        const sumPercent = assignedManagerIds.reduce(
+          (sum, mId) => sum + (managerRecommendations[mId]?.suggestedIncrementPercent || 0),
+          0
+        );
+        incPercent = Math.round((sumPercent / assignedManagerIds.length) * 10) / 10;
+        incrementAmount = Math.round((currentCtc * incPercent) / 100);
+        revisedCtc = currentCtc + incrementAmount;
+
+        finalPromoRecommended = assignedManagerIds.some(
+          (mId) => managerRecommendations[mId]?.promotionRecommended
+        );
+        const promoLeader = assignedManagerIds.find(
+          (mId) => managerRecommendations[mId]?.promotionDesignationId
+        );
+        if (promoLeader) {
+          finalPromoDesigId = managerRecommendations[promoLeader]?.promotionDesignationId;
+          finalPromoDesigName = managerRecommendations[promoLeader]?.promotionDesignationName;
+        }
+      }
+
+      const managerRecommendation = {
+        suggestedIncrementPercent: incPercent,
+        promotionRecommended: finalPromoRecommended,
+        promotionDesignationId: finalPromoDesigId,
+        promotionDesignationName: finalPromoDesigName,
+        justification: isDualManager && allManagersSubmitted
+          ? assignedManagerIds
+              .map((mId) => {
+                const r = managerRecommendations[mId];
+                return r ? `[${r.recommendedByName}]: ${r.justification}` : null;
+              })
+              .filter(Boolean)
+              .join('\n\n')
+          : thisRec.justification,
+        strengthsSummary: strengthsSummary || '',
+        recommendedBy: user?.id || user?.employeeId || '',
+        recommendedByName: user?.name || 'Reporting Manager',
+        recommendedAt: new Date().toISOString(),
+      };
+
+      const nextStatus: AppraisalStatus =
+        isDualManager && !allManagersSubmitted ? 'PENDING' : 'MANAGER_RECOMMENDED';
 
       const updatedDoc: Partial<Appraisal> = {
         proposedIncrementPercentage: incPercent,
         approvedIncrementPercentage: incPercent,
         incrementAmount,
         revisedCtc,
-        promotionRecommended: Boolean(promotionRecommended),
-        promotionDesignationId: promotionDesignationId || undefined,
-        promotionDesignationName: promotionDesignationName || undefined,
+        promotionRecommended: finalPromoRecommended,
+        promotionDesignationId: finalPromoDesigId,
+        promotionDesignationName: finalPromoDesigName,
         managerRecommendation,
-        status: 'MANAGER_RECOMMENDED',
-        remarks: `Manager evaluation submitted (${incPercent}% increment${promotionRecommended ? ' + Promotion' : ''}).`,
+        managerRecommendations,
+        status: nextStatus,
+        remarks:
+          isDualManager && !allManagersSubmitted
+            ? `${user?.name || 'Manager'} submitted recommendation (${thisRec.suggestedIncrementPercent}%${thisRec.promotionRecommended ? ' + Promotion' : ''}). Awaiting recommendation from co-manager.`
+            : isDualManager
+            ? `Both managers submitted recommendations. Combined recommendation: ${incPercent}%${finalPromoRecommended ? ' + Promotion' : ''}.`
+            : `Manager evaluation submitted (${incPercent}% increment${finalPromoRecommended ? ' + Promotion' : ''}).`,
         updatedAt: new Date().toISOString(),
       };
 
       await appraisalsCol.updateOne({ id }, { $set: updatedDoc, $unset: { hodReturn: '' } });
 
+      const notifsCol = getDbCollection('notifications');
+      const now = new Date().toISOString();
+
+      // If dual manager and partial submit, alert co-manager
+      if (isDualManager && !allManagersSubmitted) {
+        const otherManagerIds = assignedManagerIds.filter((mId) => mId !== activeManagerId);
+        for (const otherId of otherManagerIds) {
+          await notifsCol.updateOne(
+            { id: `notif_${id}_appraisal_dual_${otherId}` },
+            {
+              $set: {
+                id: `notif_${id}_appraisal_dual_${otherId}`,
+                userId: otherId,
+                userRole: 'MANAGER',
+                type: 'APPRAISAL_ACTION_REQUIRED',
+                title: `Co-Manager Recommendation Submitted: ${appraisal.employeeName}`,
+                message: `${user?.name || 'Co-Manager'} has submitted their recommendation for ${appraisal.employeeName} (${thisRec.suggestedIncrementPercent}%). Your recommendation is required to complete the manager recommendation stage.`,
+                isRead: false,
+                priority: 'HIGH',
+                metadata: { appraisalId: id, cycleId: appraisal.cycleId, activeSection: 'appraisals' },
+                createdAt: now,
+              },
+            },
+            { upsert: true }
+          );
+        }
+      }
+
       const hodMissing = !appraisal.hodId;
 
-      // Notify HOD, or HR if no HOD is configured for this employee (missing-HOD exception)
-      const notifsCol = getDbCollection('notifications');
-      if (hodMissing) {
+      // When all managers have submitted, notify HOD (or HR if missing HOD)
+      if (allManagersSubmitted) {
+        if (hodMissing) {
         await notifsCol.updateOne(
           { 'metadata.appraisalId': id, type: 'APPRAISAL_HOD_MISSING_EXCEPTION' },
           {
@@ -1181,8 +1295,9 @@ appraisalRouter.put(
           justification || ''
         );
       }
+    }
 
-      const refreshed = await appraisalsCol.findOne({ id });
+    const refreshed = await appraisalsCol.findOne({ id });
       console.log(`[Appraisal] Manager recommendation submitted: ${id} for "${appraisal.employeeName}" (${appraisal.employeeCode}), Suggested Hike: ${incPercent}%, Promotion: ${promotionRecommended ? 'YES' : 'NO'}, by "${user?.name}" [${user?.role}]`);
       res.json(refreshed);
     } catch (err: any) {

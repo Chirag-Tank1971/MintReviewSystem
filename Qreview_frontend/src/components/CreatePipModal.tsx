@@ -224,7 +224,7 @@ export const CreatePipModal: React.FC<CreatePipModalProps> = ({
           </button>
         </div>
 
-        <div className="p-5 space-y-4 overflow-y-auto">
+        <div className="p-5 space-y-4 overflow-y-auto flex-1 min-h-0">
           {/* Employee picker */}
           {!selectedEmployee ? (
             <div className="space-y-2">

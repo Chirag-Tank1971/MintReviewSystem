@@ -188,6 +188,9 @@ export async function generateQuarterlyReviews(
       isAppraisalMonthDue,
       managerId: emp.managerId || emp.hodId || '',
       managerName: emp.managerName || emp.hodName || 'Assigned Manager',
+      managerIds: emp.managerIds || (emp.managerId ? [emp.managerId] : []),
+      managerNames: emp.managerNames || (emp.managerName ? [emp.managerName] : []),
+      reportsDirectlyToHod: emp.reportsDirectlyToHod,
       hodId: emp.hodId,
       hodName: emp.hodName,
       status: 'MANAGER_PENDING',
@@ -210,14 +213,18 @@ export async function generateQuarterlyReviews(
       throw insertErr;
     }
 
-    // Notify Reporting Manager
-    if (newReview.managerId) {
+    // Notify Reporting Manager(s)
+    const mgrsToNotify =
+      newReview.managerIds && newReview.managerIds.length > 0
+        ? newReview.managerIds
+        : (newReview.managerId ? [newReview.managerId] : []);
+    for (const mId of mgrsToNotify) {
       await notifCol.updateOne(
-        { id: `notif_${reviewId}_assigned` },
+        { id: `notif_${reviewId}_assigned_${mId}` },
         {
           $set: {
-            id: `notif_${reviewId}_assigned`,
-            userId: newReview.managerId,
+            id: `notif_${reviewId}_assigned_${mId}`,
+            userId: mId,
             userRole: 'MANAGER',
             type: 'REVIEW_ASSIGNED',
             title: `New Quarterly Review Assigned: ${emp.name}`,
@@ -302,18 +309,19 @@ function mergeKraSnapshot(
   return base.map((existingKra) => {
     const incoming = incomingKras.find(
       (k: any) =>
-        k.id === existingKra.id ||
-        k.kraId === existingKra.kraId ||
-        k.kraName === existingKra.kraName ||
-        k.title === existingKra.title
+        (k.id && k.id === existingKra.id) ||
+        (k.kraId && k.kraId === existingKra.kraId) ||
+        (k.kraName && k.kraName === existingKra.kraName) ||
+        (k.title && k.title === existingKra.title)
     );
     if (incoming) {
       return {
         ...existingKra,
         rating: Number(incoming.rating) || 0,
-        achievement: incoming.achievement || '',
-        comments: incoming.comments || '',
-        issueReason: incoming.issueReason || '',
+        achievement: incoming.achievement !== undefined ? incoming.achievement : existingKra.achievement || '',
+        comments: incoming.comments !== undefined ? incoming.comments : existingKra.comments || '',
+        issueReason: incoming.issueReason !== undefined ? incoming.issueReason : existingKra.issueReason || '',
+        ratingJustification: incoming.ratingJustification !== undefined ? incoming.ratingJustification : existingKra.ratingJustification || '',
       };
     }
     return existingKra;
@@ -336,10 +344,10 @@ function mergeHodKraSnapshot(
   return base.map((existingKra) => {
     const incoming = incomingHodKras.find(
       (k: any) =>
-        k.id === existingKra.id ||
-        k.kraId === existingKra.kraId ||
-        k.kraName === existingKra.kraName ||
-        k.title === existingKra.title
+        (k.id && k.id === existingKra.id) ||
+        (k.kraId && k.kraId === existingKra.kraId) ||
+        (k.kraName && k.kraName === existingKra.kraName) ||
+        (k.title && k.title === existingKra.title)
     );
     if (incoming) {
       return {
@@ -381,11 +389,27 @@ export async function submitManagerReview(
   }
 
   // Ownership verification
-  const isManager = review.managerId === user.employeeId;
+  const isManager =
+    review.managerId === user.employeeId ||
+    review.managerId === user.id ||
+    Boolean(user.employeeId && review.managerIds?.includes(user.employeeId)) ||
+    Boolean(review.managerIds?.includes(user.id));
   const isSuperAdminOrHr = user.role === 'SUPER_ADMIN' || user.role === 'HR';
   if (!isManager && !isSuperAdminOrHr) {
     throw new Error('Forbidden: Only the designated reporting manager can submit this review.');
   }
+
+  const assignedManagerIds: string[] =
+    review.managerIds && review.managerIds.length > 0
+      ? review.managerIds
+      : (review.managerId ? [review.managerId] : []);
+  const isDualManager = assignedManagerIds.length > 1;
+  const activeManagerId =
+    user.employeeId && assignedManagerIds.includes(user.employeeId)
+      ? user.employeeId
+      : user.id && assignedManagerIds.includes(user.id)
+      ? user.id
+      : assignedManagerIds[0] || user.employeeId || user.id || review.managerId;
 
   let updatedSnapshot = review.kraSnapshot || [];
   const incomingKras = payload.kraSnapshot || payload.kraRatings;
@@ -411,23 +435,77 @@ export async function submitManagerReview(
     }
   }
 
-  const finalScore = calculateWeightedScore(updatedSnapshot);
   const now = new Date().toISOString();
 
-  const nextStatus: ReviewStatus = 'HOD_PENDING';
+  // Save active manager's ratings into managerRatings
+  for (const kra of updatedSnapshot) {
+    kra.managerRatings = {
+      ...(kra.managerRatings || {}),
+      [activeManagerId]: {
+        managerId: activeManagerId,
+        managerName: user.name,
+        rating: kra.rating,
+        achievement: kra.achievement,
+        comments: kra.comments,
+        ratingJustification: kra.ratingJustification,
+        submittedAt: now,
+      },
+    };
+  }
+
+  const thisManagerScore = calculateWeightedScore(updatedSnapshot);
+  const managerSubmissions = { ...(review.managerSubmissions || {}) };
+  managerSubmissions[activeManagerId] = {
+    managerId: activeManagerId,
+    managerName: user.name,
+    submitted: true,
+    submittedAt: now,
+    score: thisManagerScore,
+    strengths: payload.strengths !== undefined ? payload.strengths : review.strengths,
+    improvements: payload.improvements !== undefined ? payload.improvements : review.improvements,
+    managerOverallComments:
+      payload.managerOverallComments !== undefined ? payload.managerOverallComments : review.managerOverallComments,
+  };
+
+  const allManagersSubmitted =
+    !isDualManager || assignedManagerIds.every((mId) => managerSubmissions[mId]?.submitted);
+
+  let finalScore = thisManagerScore;
+  let nextStatus: ReviewStatus = 'HOD_PENDING';
+
+  if (isDualManager && !allManagersSubmitted) {
+    nextStatus = 'MANAGER_PENDING';
+  } else if (isDualManager && allManagersSubmitted) {
+    // Average KRA ratings
+    for (const kra of updatedSnapshot) {
+      const ratings = assignedManagerIds
+        .map((mId) => kra.managerRatings?.[mId]?.rating)
+        .filter((r): r is number => typeof r === 'number' && r > 0);
+      if (ratings.length > 0) {
+        kra.rating = Number((ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(2));
+      }
+    }
+    finalScore = calculateWeightedScore(updatedSnapshot);
+  }
+
   const hodMissing = !review.hodId;
+  const isPartial = isDualManager && !allManagersSubmitted;
 
   const action: ReviewAction = {
     id: `act_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
     reviewId,
-    action: hodMissing ? 'HOD_MISSING_EXCEPTION' : 'SUBMITTED',
+    action: hodMissing ? 'HOD_MISSING_EXCEPTION' : isPartial ? 'MANAGER_PARTIAL_SUBMITTED' : 'SUBMITTED',
     performedBy: user.id,
     performedByName: user.name,
     performedByRole: user.role,
     remarks: hodMissing
       ? `Reporting manager submitted review with final weighted score ${finalScore}. No HOD is configured for ${review.employeeName} — review is blocked pending HOD assignment.`
+      : isPartial
+      ? `${user.name} submitted review scores (${thisManagerScore}/5). Awaiting co-manager evaluation before routing to HOD.`
       : returnEdits.resolvedRequest
       ? `Reporting manager resubmitted after return (round ${returnEdits.resolvedRequest.round}) — ${describeChanges(returnEdits.changes || [])}. Score ${finalScore}.`
+      : isDualManager
+      ? `Both managers submitted evaluations. Combined manager weighted score: ${finalScore}. Transitioned to ${nextStatus}.`
       : `Reporting manager submitted review with final weighted score ${finalScore}. Transitioned to ${nextStatus}.`,
     returnRequestId: returnEdits.resolvedRequest?.id,
     kraChanges: returnEdits.changes,
@@ -441,12 +519,13 @@ export async function submitManagerReview(
     hodScore: returnEdits.clearedHodScore ? undefined : review.hodScore,
     finalScore,
     managerScore: finalScore,
+    managerSubmissions,
     strengths: payload.strengths !== undefined ? payload.strengths : review.strengths,
     improvements: payload.improvements !== undefined ? payload.improvements : review.improvements,
     managerOverallComments:
       payload.managerOverallComments !== undefined ? payload.managerOverallComments : review.managerOverallComments,
     status: nextStatus,
-    submittedAt: now,
+    submittedAt: allManagersSubmitted ? now : review.submittedAt,
     actionHistory: [...(review.actionHistory || []), action],
     updatedAt: now,
   };

@@ -48,7 +48,7 @@ export const MasterDeleteModal: React.FC<MasterDeleteModalProps> = ({
       className={`fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto ${backdropClass}`}
     >
       <div
-        className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl max-w-md w-full my-auto overflow-hidden ${cardClass}`}
+        className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl max-w-md w-full my-auto max-h-[95vh] overflow-y-auto ${cardClass}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}

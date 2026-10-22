@@ -531,6 +531,8 @@ export function authorizeReviewAccess(
           const isAssigned =
             review.managerId === userEmpId ||
             review.managerId === req.user.id ||
+            Boolean(userEmpId && review.managerIds?.includes(userEmpId)) ||
+            Boolean(review.managerIds?.includes(req.user.id)) ||
             review.hodId === userEmpId ||
             review.employeeId === userEmpId;
 
@@ -549,6 +551,7 @@ export function authorizeReviewAccess(
             (hodDeptId && review.departmentId === hodDeptId) ||
             review.hodId === userEmpId ||
             review.managerId === userEmpId ||
+            Boolean(userEmpId && review.managerIds?.includes(userEmpId)) ||
             review.employeeId === userEmpId;
 
           if (isDeptMatch) {
@@ -586,7 +589,11 @@ export function authorizeReviewAccess(
       // actual manager relationship on the review, not the caller's stored role label, so a
       // person who holds both the manager and HOD capacity for this employee can still score.
       if (action === 'score') {
-        const isAssignedManager = review.managerId === userEmpId || review.managerId === req.user.id;
+        const isAssignedManager =
+          review.managerId === userEmpId ||
+          review.managerId === req.user.id ||
+          Boolean(userEmpId && review.managerIds?.includes(userEmpId)) ||
+          Boolean(review.managerIds?.includes(req.user.id));
         const isSuperAdminOrHr = role === 'SUPER_ADMIN' || role === 'HR';
 
         if (!isAssignedManager && !isSuperAdminOrHr) {
@@ -613,7 +620,11 @@ export function authorizeReviewAccess(
       // Submit action: ONLY the assigned reporting manager, HR, or Super Admin — checked
       // against the actual manager relationship, not the caller's stored role label.
       if (action === 'submit') {
-        const isAssignedManager = review.managerId === userEmpId || review.managerId === req.user.id;
+        const isAssignedManager =
+          review.managerId === userEmpId ||
+          review.managerId === req.user.id ||
+          Boolean(userEmpId && review.managerIds?.includes(userEmpId)) ||
+          Boolean(review.managerIds?.includes(req.user.id));
         const isSuperAdminOrHr = role === 'SUPER_ADMIN' || role === 'HR';
 
         if (!isAssignedManager && !isSuperAdminOrHr) {

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AlertTriangle, RotateCcw } from 'lucide-react';
-import { KraReturnFlag, ReviewKraSnapshot } from '../../../types';
+import { KraReturnFlag, ReviewKraSnapshot, EmployeeReview, User } from '../../../types';
 import { RatingJustificationInput } from '../RatingJustificationInput';
 import { ReturnedKraPanel } from './ReturnedKraPanel';
 import { RatingScale } from './RatingScale';
@@ -13,6 +13,8 @@ interface Step2ManagerSectionProps {
   canEdit: boolean;
   onKraChange: (index: number, field: keyof ReviewKraSnapshot, value: any) => void;
   onReturnFlagChange?: (index: number, patch: Partial<KraReturnFlag>) => void;
+  review?: EmployeeReview;
+  currentUser?: User | null;
 }
 
 export const Step2ManagerSection: React.FC<Step2ManagerSectionProps> = ({
@@ -20,6 +22,8 @@ export const Step2ManagerSection: React.FC<Step2ManagerSectionProps> = ({
   canEdit,
   onKraChange,
   onReturnFlagChange,
+  review,
+  currentUser,
 }) => {
   // While a return to the Manager is open, only the returned KRAs are editable; the rest are
   // locked (and collapsed) so unrelated ratings can't change silently.
@@ -34,7 +38,9 @@ export const Step2ManagerSection: React.FC<Step2ManagerSectionProps> = ({
         <div className="max-w-prose">
           <h3 className="text-base font-bold text-slate-900 dark:text-white">Score each key result area</h3>
           <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
-            Rate every KRA from 1 to 5 against its target. Scores of 1, 2 or 5 need a short justification.
+            {review?.managerIds && review.managerIds.length > 1
+              ? 'Both managers evaluate KRAs separately — ratings average automatically once both managers submit.'
+              : 'Rate every KRA from 1 to 5 against its target. Scores of 1, 2 or 5 need a short justification.'}
           </p>
         </div>
         <p className="text-xs text-slate-600 dark:text-slate-400 tabular-nums">
@@ -133,7 +139,20 @@ export const Step2ManagerSection: React.FC<Step2ManagerSectionProps> = ({
                 name={`mgr-kra-rating-${kraDomId}`}
                 label="Your rating"
                 rating={rating}
-                markers={[{ label: 'Employee', value: item.selfRating, tone: 'employee' }]}
+                markers={[
+                  { label: 'Employee', value: item.selfRating, tone: 'employee' },
+                  ...(review?.managerIds && review.managerIds.length > 1
+                    ? (() => {
+                        const otherMgrId = review.managerIds.find(
+                          (m) => m !== currentUser?.employeeId && m !== currentUser?.id
+                        );
+                        const otherRating = otherMgrId ? item.managerRatings?.[otherMgrId]?.rating : undefined;
+                        const otherIdx = review.managerIds.indexOf(otherMgrId || '');
+                        const otherName = otherIdx >= 0 ? review.managerNames?.[otherIdx] || 'Co-Manager' : 'Co-Manager';
+                        return otherRating ? [{ label: otherName, value: otherRating, tone: 'manager' as const }] : [];
+                      })()
+                    : []),
+                ]}
                 disabled={!cardEditable}
                 onSelect={(value) => onKraChange(idx, 'rating', value)}
               />

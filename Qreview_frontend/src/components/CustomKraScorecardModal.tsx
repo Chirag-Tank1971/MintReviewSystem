@@ -291,7 +291,7 @@ export const CustomKraScorecardModal: React.FC<CustomKraScorecardModalProps> = (
           </button>
         </div>
 
-        <div className="overflow-y-auto p-5 space-y-4">
+        <div className="overflow-y-auto p-5 space-y-4 flex-1 min-h-0">
           {/* Employee Detail Header Block (mirrors the standard KRA sheet layout) */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-slate-200 dark:bg-slate-700 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
             {headerFields.map((f) => (

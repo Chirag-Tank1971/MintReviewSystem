@@ -1987,4 +1987,72 @@ export const api = {
   },
 
   clearCache: invalidateApiCache,
+
+  // ─── Sales Champs ─────────────────────────────────────────────────────────
+
+  getSalesChampsReports: async (params: { financialYear?: string; status?: string } = {}): Promise<any[]> => {
+    const qs = new URLSearchParams();
+    if (params.financialYear) qs.set('financialYear', params.financialYear);
+    if (params.status) qs.set('status', params.status);
+    const res = await fetchWithAutoRefresh(`${API_BASE}/sales-champs?${qs}`, { headers: getAuthHeaders() });
+    if (!res.ok) throw new Error('Failed to load Sales Champs reports.');
+    return res.json();
+  },
+
+  createSalesChampsReport: async (data: any): Promise<any> => {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/sales-champs`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'Failed to create report.'); }
+    return res.json();
+  },
+
+  updateSalesChampsReport: async (id: string, data: any): Promise<any> => {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/sales-champs/${id}`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'Failed to update report.'); }
+    return res.json();
+  },
+
+  finalizeSalesChampsReport: async (id: string): Promise<any> => {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/sales-champs/${id}/finalize`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'Failed to finalize.'); }
+    return res.json();
+  },
+
+  lockSalesChampsReport: async (id: string): Promise<any> => {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/sales-champs/${id}/lock`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'Failed to lock.'); }
+    return res.json();
+  },
+
+  deleteSalesChampsReport: async (id: string): Promise<void> => {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/sales-champs/${id}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'Failed to delete.'); }
+  },
+
+  getMySalesChampsReports: async (employeeId: string, financialYear?: string): Promise<any[]> => {
+    const qs = new URLSearchParams();
+    if (financialYear) qs.set('financialYear', financialYear);
+    const res = await fetchWithAutoRefresh(`${API_BASE}/sales-champs/employee/${employeeId}?${qs}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error('Failed to load Sales Champs report.');
+    return res.json();
+  },
 };
+

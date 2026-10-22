@@ -384,10 +384,24 @@ export const QuarterlyReviewView: React.FC<QuarterlyReviewViewProps> = ({
       if (r.managerId && r.managerName) {
         map.set(r.managerId, r.managerName);
       }
+      if (r.managerIds && r.managerNames) {
+        r.managerIds.forEach((mId, idx) => {
+          if (mId && r.managerNames?.[idx]) {
+            map.set(mId, r.managerNames[idx]);
+          }
+        });
+      }
     });
     employees.forEach((e) => {
       if (e.managerId && e.managerName) {
         map.set(e.managerId, e.managerName);
+      }
+      if (e.managerIds && e.managerNames) {
+        e.managerIds.forEach((mId, idx) => {
+          if (mId && e.managerNames?.[idx]) {
+            map.set(mId, e.managerNames[idx]);
+          }
+        });
       }
     });
     return Array.from(map.entries())
@@ -401,11 +415,18 @@ export const QuarterlyReviewView: React.FC<QuarterlyReviewViewProps> = ({
     switch (view) {
       case 'MINE': {
         const role = currentUser?.role;
-        const isMine = (id?: string) => Boolean(id) && (id === currentUser?.employeeId || id === currentUser?.id);
+        const isMine = (id?: string, ids?: string[]) => {
+          const userEmpId = currentUser?.employeeId;
+          const userId = currentUser?.id;
+          return Boolean(
+            (id && (id === userEmpId || id === userId)) ||
+            (ids && (ids.includes(userEmpId || '') || ids.includes(userId || '')))
+          );
+        };
         if (role === 'EMPLOYEE') return !r.isSelfSubmitted && !isCompletedReview(r);
         if (role === 'HR' || role === 'SUPER_ADMIN') return r.status === 'HR_PENDING';
         return (
-          (['MANAGER_PENDING', 'RETURNED'].includes(r.status) && isMine(r.managerId)) ||
+          (['MANAGER_PENDING', 'RETURNED'].includes(r.status) && isMine(r.managerId, r.managerIds)) ||
           (r.status === 'HOD_PENDING' && isMine(r.hodId))
         );
       }
@@ -432,14 +453,16 @@ export const QuarterlyReviewView: React.FC<QuarterlyReviewViewProps> = ({
       if (appraisalDueOnly && !r.isAppraisalMonthDue) return false;
       if (filterReviewType === 'QUARTERLY' && (r.reviewType === 'PIP_WEEKLY' || r.reviewType === 'PIP_FINAL')) return false;
       if (filterReviewType === 'PIP' && r.reviewType !== 'PIP_WEEKLY' && r.reviewType !== 'PIP_FINAL') return false;
-      if (filterManagerId !== 'ALL' && r.managerId !== filterManagerId) return false;
+      if (filterManagerId !== 'ALL' && r.managerId !== filterManagerId && !r.managerIds?.includes(filterManagerId)) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchesName = r.employeeName?.toLowerCase().includes(q);
         const matchesCode = r.employeeCode?.toLowerCase().includes(q);
         const matchesDept = r.departmentName?.toLowerCase().includes(q);
         const matchesDesig = r.designationName?.toLowerCase().includes(q);
-        const matchesMgr = r.managerName?.toLowerCase().includes(q);
+        const matchesMgr =
+          r.managerName?.toLowerCase().includes(q) ||
+          r.managerNames?.some((m) => m.toLowerCase().includes(q));
         if (!matchesName && !matchesCode && !matchesDept && !matchesDesig && !matchesMgr) return false;
       }
       return true;
@@ -1645,18 +1668,18 @@ export const QuarterlyReviewView: React.FC<QuarterlyReviewViewProps> = ({
                             </h4>
                             <EmployeeStatusBadge status={r.employeeStatus} />
                             {r.reviewType === 'PIP_WEEKLY' && (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 whitespace-nowrap">
                                 PIP W{r.pipCycleNumber || 1}
                               </span>
                             )}
                             {r.reviewType === 'PIP_FINAL' && (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800 whitespace-nowrap">
                                 PIP Final
                               </span>
                             )}
                             <ReturnCountBadge review={r} />
                             {r.isAppraisalMonthDue && (
-                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" title="Appraisal Due this Quarter" />
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" title="Appraisal Due this Quarter" />
                             )}
                           </div>
                           <p className="text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">
@@ -1681,8 +1704,8 @@ export const QuarterlyReviewView: React.FC<QuarterlyReviewViewProps> = ({
                       <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[11px] font-semibold border ${stage.className}`}>
                         {stage.label}
                       </span>
-                      <span className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[140px]">
-                        Mgr: <strong className="text-slate-700 dark:text-slate-300">{r.managerName || '—'}</strong>
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[140px]" title={r.managerNames && r.managerNames.length > 1 ? r.managerNames.join(' & ') : r.managerName}>
+                        Mgr: <strong className="text-slate-700 dark:text-slate-300">{r.managerNames && r.managerNames.length > 1 ? r.managerNames.join(' & ') : (r.managerName || '—')}</strong>
                       </span>
                     </div>
 
@@ -1793,7 +1816,7 @@ export const QuarterlyReviewView: React.FC<QuarterlyReviewViewProps> = ({
                       className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                     />
                   </th>
-                  <th className="py-2.5 px-3">Employee</th>
+                  <th className="py-2.5 px-3 min-w-[190px]">Employee</th>
                   <th className="py-2.5 px-3">Department</th>
                   <th className="py-2.5 px-3">Manager</th>
                   <th className="py-2.5 px-3">Review stage</th>
@@ -1849,24 +1872,24 @@ export const QuarterlyReviewView: React.FC<QuarterlyReviewViewProps> = ({
                             {r.employeeName.charAt(0)}
                           </div>
                           <div>
-                            <div className="flex items-center space-x-1.5 flex-wrap">
-                              <span className="font-semibold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-semibold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors whitespace-nowrap">
                                 {r.employeeName}
                               </span>
                               <EmployeeStatusBadge status={r.employeeStatus} />
                               {r.reviewType === 'PIP_WEEKLY' && (
-                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 whitespace-nowrap">
                                   PIP W{r.pipCycleNumber || 1}
                                 </span>
                               )}
                               {r.reviewType === 'PIP_FINAL' && (
-                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800 whitespace-nowrap">
                                   PIP Final
                                 </span>
                               )}
                               <ReturnCountBadge review={r} />
                               {r.isAppraisalMonthDue && (
-                                <span title="Appraisal Due this Quarter" className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                <span title="Appraisal Due this Quarter" className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
                               )}
                             </div>
                             <span className="text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">
@@ -1889,12 +1912,19 @@ export const QuarterlyReviewView: React.FC<QuarterlyReviewViewProps> = ({
                       {/* Manager */}
                       <td className="py-2 px-3">
                         <div className="flex items-center space-x-1.5">
-                          <div className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[11px] font-bold text-slate-600 dark:text-slate-300 shrink-0">
-                            {r.managerName?.charAt(0) || 'M'}
+                          <div className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-600 dark:text-slate-300 shrink-0">
+                            {r.managerNames && r.managerNames.length > 1 ? '2M' : (r.managerName?.charAt(0) || 'M')}
                           </div>
-                          <span className="text-slate-700 dark:text-slate-300 font-medium truncate max-w-[120px]">
-                            {r.managerName || '—'}
-                          </span>
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-slate-700 dark:text-slate-300 font-medium truncate max-w-[140px]" title={r.managerNames && r.managerNames.length > 1 ? r.managerNames.join(', ') : r.managerName}>
+                              {r.managerNames && r.managerNames.length > 1 ? r.managerNames.join(', ') : (r.managerName || '—')}
+                            </span>
+                            {r.managerNames && r.managerNames.length > 1 && (
+                              <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold leading-tight">
+                                Dual Evaluation
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </td>
 
@@ -2289,10 +2319,10 @@ const PeriodLifecycleModal: React.FC<PeriodLifecycleModalProps> = ({
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs ${backdropClass}`}
+      className={`fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-slate-900/60 backdrop-blur-xs ${backdropClass}`}
     >
-      <div className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl max-w-2xl w-full p-6 shadow-2xl space-y-6 ${cardClass}`}>
-        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
+      <div className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl max-w-2xl w-full shadow-2xl max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden my-auto ${cardClass}`}>
+        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-5 pt-5 pb-4 shrink-0">
           <div className="flex items-center space-x-3">
             <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950/50 rounded-xl text-indigo-600 dark:text-indigo-400">
               <Settings2 className="w-5 h-5" />
@@ -2314,7 +2344,7 @@ const PeriodLifecycleModal: React.FC<PeriodLifecycleModalProps> = ({
           </button>
         </div>
 
-        <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+        <div className="space-y-3 overflow-y-auto flex-1 min-h-0 px-5 py-3 pr-4">
           {periods.map((period) => {
             const isCurrentSelected = period.id === selectedPeriodId;
             const isUpdating = updatingPeriodId === period.id;
@@ -2408,14 +2438,14 @@ const PeriodLifecycleModal: React.FC<PeriodLifecycleModalProps> = ({
           })}
         </div>
 
-        <div className="bg-slate-50 dark:bg-slate-850 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 flex items-start space-x-3 text-xs text-slate-600 dark:text-slate-400">
+        <div className="mx-5 mb-3 bg-slate-50 dark:bg-slate-850 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 flex items-start space-x-3 text-xs text-slate-600 dark:text-slate-400 shrink-0">
           <AlertCircle className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
           <p>
             <strong>Enterprise policy:</strong> When setting a period to <strong>ACTIVE</strong>, any currently active period is automatically safely transitioned to <strong>LOCKED</strong>. All existing employee evaluation submissions and manager appraisals remain permanently archived.
           </p>
         </div>
 
-        <div className="flex justify-end pt-2">
+        <div className="flex justify-end px-5 pb-5 pt-2 shrink-0">
           <button
             onClick={handleClose}
             className="px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"

@@ -46,6 +46,9 @@ export interface Employee {
   joiningDate: string;
   managerId?: string;
   managerName?: string;
+  managerIds?: string[];
+  managerNames?: string[];
+  reportsDirectlyToHod?: boolean;
   hodId?: string;
   hodName?: string;
   cycleId: string;
@@ -89,6 +92,8 @@ export interface CreateEmployeePayload {
   cycleId: string;
   startingReviewPeriodId: string;
   managerId?: string;
+  managerIds?: string[];
+  reportsDirectlyToHod?: boolean;
   hodId?: string;
   currentKraTemplateId?: string;
   currentCtc?: number;

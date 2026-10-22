@@ -175,7 +175,11 @@ export async function checkEmployeeReviewEligibility(
   const statusActive = emp.status === 'ACTIVE' || (includeProbation && emp.status === 'PROBATION');
 
   // 2. Manager check
-  const hasManager = Boolean(emp.managerId || emp.hodId);
+  const hasManager = Boolean(
+    emp.reportsDirectlyToHod
+      ? emp.hodId
+      : (emp.managerIds && emp.managerIds.length > 0) || emp.managerId || emp.hodId
+  );
 
   // 3. Existing review check
   const alreadyHasReview = preload?.reviewedEmployeeIds
@@ -294,7 +298,10 @@ export async function createQuarterlyReview(options: CreateQuarterlyReviewOption
   }
 
   // 2. Validate Manager
-  if (!emp.managerId && !emp.hodId) {
+  const hasSomeReporting = emp.reportsDirectlyToHod
+    ? Boolean(emp.hodId)
+    : Boolean(emp.managerId || (emp.managerIds && emp.managerIds.length > 0) || emp.hodId);
+  if (!hasSomeReporting) {
     throw new Error(`Employee ${emp.name} (${emp.employeeCode}) has no reporting manager or HOD assigned.`);
   }
 
@@ -384,6 +391,9 @@ export async function createQuarterlyReview(options: CreateQuarterlyReviewOption
     designationName: emp.designationName || 'Designation',
     managerId: emp.managerId || emp.hodId || '',
     managerName: emp.managerName || emp.hodName || '',
+    managerIds: emp.managerIds || (emp.managerId ? [emp.managerId] : []),
+    managerNames: emp.managerNames || (emp.managerName ? [emp.managerName] : []),
+    reportsDirectlyToHod: emp.reportsDirectlyToHod,
     hodId: emp.hodId,
     hodName: emp.hodName,
     cycleId: emp.cycleId,

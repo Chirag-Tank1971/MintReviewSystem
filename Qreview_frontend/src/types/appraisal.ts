@@ -52,6 +52,20 @@ export interface Appraisal {
   evaluatedQuarterCount?: number;
   managerId: string;
   managerName: string;
+  managerIds?: string[];
+  managerNames?: string[];
+  reportsDirectlyToHod?: boolean;
+  managerRecommendations?: Record<string, {
+    suggestedIncrementPercent: number;
+    promotionRecommended: boolean;
+    promotionDesignationId?: string;
+    promotionDesignationName?: string;
+    justification?: string;
+    strengthsSummary?: string;
+    recommendedBy: string;
+    recommendedByName: string;
+    recommendedAt: string;
+  }>;
   hodId?: string;
   hodName?: string;
   status: AppraisalStatus;

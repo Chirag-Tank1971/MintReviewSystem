@@ -67,6 +67,9 @@ const DepartmentHierarchyView = lazy(() =>
 const PerformanceImprovementPlansView = lazy(() =>
   import('./components/PerformanceImprovementPlansView').then((m) => ({ default: m.PerformanceImprovementPlansView }))
 );
+const SalesChampsView = lazy(() =>
+  import('./components/SalesChampsView').then((m) => ({ default: m.SalesChampsView }))
+);
 
 // Modals lazy loaded on demand
 const EmployeeModal = lazy(() =>
@@ -352,6 +355,8 @@ function AppContent() {
                       setIsAssignKraModalOpen(true);
                     }}
                   />
+                ) : currentView === 'sales_champs' ? (
+                  <SalesChampsView employees={employees} departments={departments} />
                 ) : currentView === 'employees' && ['SUPER_ADMIN', 'HR'].includes(user?.role || '') ? (
                   <EmployeeDirectory
                     currentUser={user}

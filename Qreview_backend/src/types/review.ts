@@ -160,6 +160,15 @@ export interface ReviewKraSnapshot {
   hodAchievement?: string;
   hodComments?: string;
   hodJustification?: string; // Mandatory justification when hodRating is 1, 2, or 5
+  managerRatings?: Record<string, {
+    managerId: string;
+    managerName?: string;
+    rating: number;
+    achievement?: string;
+    comments?: string;
+    ratingJustification?: string;
+    submittedAt?: string;
+  }>;
   returnFlag?: KraReturnFlag;
   /** Left by the last resolved Manager return so the next reviewer can see what changed. */
   revisedAfterReturn?: {
@@ -182,6 +191,7 @@ export interface ReviewAction {
     | 'DRAFT_SAVED'
     | 'SELF_SUBMITTED'
     | 'SUBMITTED'
+    | 'MANAGER_PARTIAL_SUBMITTED'
     | 'RETURNED'
     | 'RESUBMITTED'
     | 'APPROVED'
@@ -225,6 +235,19 @@ export interface EmployeeReview {
   isAppraisalMonthDue?: boolean;
   managerId: string;
   managerName: string;
+  managerIds?: string[];
+  managerNames?: string[];
+  reportsDirectlyToHod?: boolean;
+  managerSubmissions?: Record<string, {
+    managerId: string;
+    managerName?: string;
+    submitted: boolean;
+    submittedAt?: string;
+    score?: number;
+    strengths?: string;
+    improvements?: string;
+    managerOverallComments?: string;
+  }>;
   hodId?: string;
   hodName?: string;
   hrId?: string;

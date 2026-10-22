@@ -55,6 +55,9 @@ export const AiPerformanceHub: React.FC<AiPerformanceHubProps> = ({ currentUser 
 
   const loadBaseData = async () => {
     setLoadingEmployees(true);
+    // Clear in-memory AI generated draft reviews upon refresh
+    setSynthesisResult(null);
+    setTalentInsights(null);
     try {
       const [empResult, talentResult] = await Promise.allSettled([
         api.getEmployees(),
@@ -226,7 +229,10 @@ export const AiPerformanceHub: React.FC<AiPerformanceHubProps> = ({ currentUser 
                   <select
                     id="select_synthesis_employee"
                     value={selectedEmployeeId}
-                    onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                    onChange={(e) => {
+                      setSelectedEmployeeId(e.target.value);
+                      setSynthesisResult(null);
+                    }}
                     className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   >
                     {employees.map((emp) => (

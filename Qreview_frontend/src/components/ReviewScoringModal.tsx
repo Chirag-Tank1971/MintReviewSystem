@@ -31,6 +31,7 @@ import {
   AlertTriangle,
   Award,
   Loader2,
+  Users,
 } from 'lucide-react';
 import {
   Step1SelfSection,
@@ -134,23 +135,35 @@ export const ReviewScoringModal: React.FC<ReviewScoringModalProps> = ({
   // Sync state when review prop changes
   useEffect(() => {
     if (review) {
+      const userEmpId = currentUser?.employeeId;
+      const userId = currentUser?.id;
+      const activeManagerId =
+        (userEmpId && review.managerIds?.includes(userEmpId)) ? userEmpId :
+        (userId && review.managerIds?.includes(userId)) ? userId :
+        (userEmpId === review.managerId || userId === review.managerId) ? (userEmpId || userId) :
+        null;
+      const mySubmission = activeManagerId && review.managerSubmissions ? review.managerSubmissions[activeManagerId] : null;
+
       setSnapshots(
-        review.kraSnapshot.map((s) => ({
-          ...s,
-          rating: s.rating || 0,
-          achievement: s.achievement || '',
-          comments: s.comments || '',
-          ratingJustification: s.ratingJustification || '',
-          hodRating: s.hodRating || 0,
-          hodAchievement: s.hodAchievement || '',
-          hodComments: s.hodComments || '',
-          hodJustification: s.hodJustification || '',
-          selfJustification: s.selfJustification || '',
-        }))
+        review.kraSnapshot.map((s) => {
+          const myRating = activeManagerId && s.managerRatings ? s.managerRatings[activeManagerId] : null;
+          return {
+            ...s,
+            rating: myRating ? myRating.rating : (s.rating || 0),
+            achievement: myRating?.achievement !== undefined ? myRating.achievement : (s.achievement || ''),
+            comments: myRating?.comments !== undefined ? myRating.comments : (s.comments || ''),
+            ratingJustification: myRating?.ratingJustification !== undefined ? myRating.ratingJustification : (s.ratingJustification || ''),
+            hodRating: s.hodRating || 0,
+            hodAchievement: s.hodAchievement || '',
+            hodComments: s.hodComments || '',
+            hodJustification: s.hodJustification || '',
+            selfJustification: s.selfJustification || '',
+          };
+        })
       );
-      setStrengths(review.strengths || '');
-      setImprovements(review.improvements || '');
-      setManagerComments(review.managerOverallComments || '');
+      setStrengths(mySubmission?.strengths !== undefined ? mySubmission.strengths : (review.strengths || ''));
+      setImprovements(mySubmission?.improvements !== undefined ? mySubmission.improvements : (review.improvements || ''));
+      setManagerComments(mySubmission?.managerOverallComments !== undefined ? mySubmission.managerOverallComments : (review.managerOverallComments || ''));
       setHodOverallComments(review.hodOverallComments || '');
       setHrComments(review.hrComments || '');
       setEmployeeComments(review.employeeComments || '');
@@ -281,7 +294,15 @@ export const ReviewScoringModal: React.FC<ReviewScoringModalProps> = ({
   const canActInElevatedCapacity = currentUser?.role !== 'EMPLOYEE';
   const isManager =
     canActInElevatedCapacity &&
-    (review.managerId === currentUser?.employeeId || review.managerId === currentUser?.id);
+    (review.managerId === currentUser?.employeeId ||
+     review.managerId === currentUser?.id ||
+     Boolean(currentUser?.employeeId && review.managerIds?.includes(currentUser.employeeId)) ||
+     Boolean(currentUser?.id && review.managerIds?.includes(currentUser.id)));
+  const assignedManagerIds: string[] =
+    review.managerIds && review.managerIds.length > 0
+      ? review.managerIds
+      : (review.managerId ? [review.managerId] : []);
+  const isDualManager = assignedManagerIds.length > 1;
   const canEdit = !review.isClosed && (isHrOrAdmin || isManager);
   const isHod = canActInElevatedCapacity && review.hodId === currentUser?.employeeId;
   const canHodAct = isHod && review.status === 'HOD_PENDING' && !review.isClosed;
@@ -794,7 +815,11 @@ export const ReviewScoringModal: React.FC<ReviewScoringModalProps> = ({
                 )}
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                {review.designationName} • {review.departmentName} • Period: <span className="font-semibold text-slate-700 dark:text-slate-200">{review.reviewPeriodName}</span> • Manager: <span className="font-semibold text-slate-700 dark:text-slate-200">{review.managerName}</span>
+                {review.designationName} • {review.departmentName} • Period: <span className="font-semibold text-slate-700 dark:text-slate-200">{review.reviewPeriodName}</span> • {isDualManager ? 'Managers: ' : 'Manager: '}<span className="font-semibold text-slate-700 dark:text-slate-200">
+                  {isDualManager && review.managerNames && review.managerNames.length > 0
+                    ? review.managerNames.join(' & ')
+                    : review.managerName}
+                </span>
               </p>
             </div>
           </div>
@@ -1005,7 +1030,7 @@ export const ReviewScoringModal: React.FC<ReviewScoringModalProps> = ({
               onClick={() => setWizardStep(2)}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 wizardStep === 2
-                  ? 'bg-white dark:bg-slate-750 text-indigo-950 dark:text-white font-bold border border-slate-200 dark:border-slate-700 ring-1 ring-black/5'
+                  ? 'bg-white dark:bg-slate-750 text-indigo-950 dark:text-white font-bold border border-slate-200 dark:border-slate-700 ring-1 ring-black/5 shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
@@ -1015,6 +1040,11 @@ export const ReviewScoringModal: React.FC<ReviewScoringModalProps> = ({
                 2
               </span>
               <span>Manager scoring</span>
+              {isDualManager && (
+                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                  Dual
+                </span>
+              )}
               <span className="text-[11px] tabular-nums font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/50 px-1.5 py-0.2 rounded-md border border-indigo-200 dark:border-indigo-800">
                 {computedScore.toFixed(2)}
               </span>
@@ -1100,12 +1130,97 @@ export const ReviewScoringModal: React.FC<ReviewScoringModalProps> = ({
           </button>
         </div>
 
+        {/* DUAL MANAGER EVALUATION PIPELINE STRIP */}
+        {isDualManager && (
+          <div className="px-6 py-2 bg-slate-50/90 dark:bg-slate-850/90 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+              <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 font-semibold text-[11px] uppercase tracking-wider">
+                <Users className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                <span>Dual Reviewers:</span>
+              </div>
+
+              {/* Parallel Reviewers Track */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {assignedManagerIds.map((mId, i) => {
+                  const mName = review.managerNames?.[i] || (i === 0 ? review.managerName : `Manager ${i + 1}`);
+                  const sub = review.managerSubmissions?.[mId];
+                  const isMe = currentUser?.employeeId === mId || currentUser?.id === mId;
+                  const initial = mName.charAt(0).toUpperCase();
+
+                  return (
+                    <div
+                      key={mId}
+                      className={`flex items-center gap-2 px-2.5 py-1 rounded-lg border text-xs transition-all ${
+                        sub?.submitted
+                          ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/70 text-emerald-900 dark:text-emerald-200'
+                          : 'bg-white dark:bg-slate-800 border-amber-200 dark:border-amber-800/70 text-amber-900 dark:text-amber-200 shadow-2xs'
+                      }`}
+                    >
+                      <div
+                        className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 ${
+                          sub?.submitted
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-amber-500 text-white'
+                        }`}
+                      >
+                        {initial}
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-semibold text-slate-800 dark:text-slate-200">
+                          {mName}
+                        </span>
+                        {isMe && (
+                          <span className="text-[9px] px-1.5 py-0.2 rounded font-bold bg-indigo-100 dark:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300">
+                            You
+                          </span>
+                        )}
+                        <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                          (Mgr {i + 1})
+                        </span>
+                      </div>
+
+                      <span className="text-slate-300 dark:text-slate-600">·</span>
+
+                      {sub?.submitted ? (
+                        <span className="font-bold tabular-nums text-emerald-700 dark:text-emerald-400 flex items-center gap-1 text-[11px]">
+                          <Check className="w-3 h-3 text-emerald-600" />
+                          <span>Rated {sub.score?.toFixed(2)}/5</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                          <span>Pending rating</span>
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Pipeline Outcome Rule */}
+            <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+              {review.managerScore !== undefined && review.managerScore > 0 ? (
+                <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-semibold text-slate-800 dark:text-slate-200">
+                  Combined Average: <strong className="text-indigo-600 dark:text-indigo-400">{review.managerScore.toFixed(2)}</strong> / 5.00
+                </span>
+              ) : (
+                <span className="hidden lg:inline text-slate-500 dark:text-slate-400 italic">
+                  Ratings will average automatically upon co-manager submission
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* LIVE SCORE BANNER */}
         {wizardStep === 2 && (
           <ScoreSummaryBar
             computedScore={computedScore}
             scoreTier={scoreTier}
             unratedCount={unratedCount}
+            isDualManager={isDualManager}
           />
         )}
         {wizardStep === 3 && (
@@ -1136,6 +1251,8 @@ export const ReviewScoringModal: React.FC<ReviewScoringModalProps> = ({
                 canEdit={canEdit}
                 onKraChange={handleKraChange}
                 onReturnFlagChange={handleReturnFlagChange}
+                review={review}
+                currentUser={currentUser}
               />
               <ManagerFeedbackSection
                 strengths={strengths}

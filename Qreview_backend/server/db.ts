@@ -118,6 +118,26 @@ class InMemoryCollection<T extends { id?: string; _id?: any }> {
       });
     }
 
+    // Ensure employees have managerIds and reportsDirectlyToHod populated for backward compatibility
+    if (name === 'employees') {
+      this.items.forEach((emp: any, id: string) => {
+        let changed = false;
+        const patch: any = {};
+        if (emp.managerId && (!emp.managerIds || emp.managerIds.length === 0)) {
+          patch.managerIds = [emp.managerId];
+          patch.managerNames = emp.managerName ? [emp.managerName] : [];
+          changed = true;
+        }
+        if (emp.reportsDirectlyToHod === undefined) {
+          patch.reportsDirectlyToHod = false;
+          changed = true;
+        }
+        if (changed) {
+          this.items.set(id, { ...emp, ...patch });
+        }
+      });
+    }
+
     // Register default unique constraints for core collections
     if (name === 'employeeReviews') {
       this.uniqueIndexes.push({ fields: ['employeeId', 'reviewPeriodId'], name: 'employeeId_1_reviewPeriodId_1' });
@@ -295,6 +315,7 @@ export const memoryDb = {
   locations: new InMemoryCollection<any>('locations', []),
   performanceImprovementPlans: new InMemoryCollection<PerformanceImprovementPlan>('performance_improvement_plans', []),
   reviewReturnDrafts: new InMemoryCollection<ReviewReturnDraft>('review_return_drafts', []),
+  salesChampsReports: new InMemoryCollection<any>('sales_champs_reports', []),
   systemConfig: new InMemoryCollection<SystemConfig>('system_config', [
     { id: 'default', hodApprovalEnabled: false, selfAssessmentEnabled: false, updatedAt: new Date().toISOString() },
   ]),
@@ -357,6 +378,7 @@ const MONGO_COLLECTION_MAP: Record<string, string> = {
   systemConfig: 'system_config',
   performanceImprovementPlans: 'performance_improvement_plans',
   reviewReturnDrafts: 'review_return_drafts',
+  salesChampsReports: 'sales_champs_reports',
 };
 
 export function getDbCollection(collectionName: keyof typeof memoryDb): any {

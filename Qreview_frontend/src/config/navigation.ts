@@ -13,6 +13,7 @@ import {
   Shield,
   ClipboardList,
   Bell,
+  Trophy,
 } from 'lucide-react';
 import type { AppView } from '../hooks/useUrlHashView';
 import type { UserRole } from '../types';
@@ -92,6 +93,15 @@ export const NAV_ITEMS: NavItemConfig[] = [
     subtitle: 'Rating distribution and department budgets',
     icon: BarChart3,
     roles: ['SUPER_ADMIN', 'HR', 'HOD', 'MANAGEMENT'],
+  },
+  {
+    id: 'sales_champs',
+    group: 'Work',
+    mobileSection: 'primary',
+    label: 'Sales Champs',
+    subtitle: 'Incentive targets & achievement reports for the sales team',
+    icon: Trophy,
+    roles: ['SUPER_ADMIN', 'HR', 'EMPLOYEE', 'MANAGER', 'REPORTING_MANAGER', 'HOD'],
   },
   {
     id: 'reports',

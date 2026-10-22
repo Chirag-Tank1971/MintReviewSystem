@@ -259,6 +259,8 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
   const [hasUserManuallyChangedCycle, setHasUserManuallyChangedCycle] = useState(false);
   const [startingReviewPeriodId, setStartingReviewPeriodId] = useState('');
   const [managerId, setManagerId] = useState('');
+  const [secondaryManagerId, setSecondaryManagerId] = useState('');
+  const [reportsDirectlyToHod, setReportsDirectlyToHod] = useState(false);
   const [hodId, setHodId] = useState('');
   const [currentKraTemplateId, setCurrentKraTemplateId] = useState('');
   const [availableTemplates, setAvailableTemplates] = useState<KraTemplate[]>(kraTemplates);
@@ -438,7 +440,11 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
           ? employeeToEdit.startingReviewPeriodId
           : defaultReviewPeriodId
       );
-      setManagerId(employeeToEdit.managerId || '');
+      const primaryMgr = employeeToEdit.managerIds?.[0] || employeeToEdit.managerId || '';
+      const secondaryMgr = employeeToEdit.managerIds?.[1] || '';
+      setManagerId(primaryMgr);
+      setSecondaryManagerId(secondaryMgr);
+      setReportsDirectlyToHod(Boolean(employeeToEdit.reportsDirectlyToHod));
       setHodId(employeeToEdit.hodId || '');
       setCurrentKraTemplateId(employeeToEdit.currentKraTemplateId || '');
       setCurrentCtc(employeeToEdit.currentCtc !== undefined ? employeeToEdit.currentCtc : 1800000);
@@ -536,6 +542,8 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
       setHasUserManuallyChangedCycle(false);
       setStartingReviewPeriodId(defaultReviewPeriodId);
       setManagerId('');
+      setSecondaryManagerId('');
+      setReportsDirectlyToHod(false);
       setHodId(defaultDeptObj?.hodId || '');
       setCurrentKraTemplateId('');
       setCurrentCtc(1800000);
@@ -579,8 +587,11 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
     const suggestedRehireCycle = getSuggestedCycle(todayStr, activeCycles);
     setCycleId(suggestedRehireCycle?.id || activeCycles[0]?.id || '');
     setHasUserManuallyChangedCycle(false);
-    setStartingReviewPeriodId(defaultReviewPeriodId);
-    setManagerId(pastEmp.managerId || '');
+    const primaryMgr = pastEmp.managerIds?.[0] || pastEmp.managerId || '';
+    const secondaryMgr = pastEmp.managerIds?.[1] || '';
+    setManagerId(primaryMgr);
+    setSecondaryManagerId(secondaryMgr);
+    setReportsDirectlyToHod(Boolean(pastEmp.reportsDirectlyToHod));
     setHodId(pastEmp.hodId || '');
     setCurrentKraTemplateId(pastEmp.currentKraTemplateId || '');
     setCurrentCtc(pastEmp.currentCtc !== undefined ? pastEmp.currentCtc : 1800000);
@@ -822,12 +833,12 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
         toast.warning('Joining Date is required.', 'Validation Error');
         return;
       }
-      if (!managerId && !isTargetHod) {
+      if (!reportsDirectlyToHod && !managerId && !isTargetHod) {
         setError('Reporting Manager (L1) is required. Self-managed employees are not permitted.');
         toast.warning('Reporting Manager is required.', 'Validation Error');
         return;
       }
-      if (!hodId && !isTargetHod) {
+      if (!hodId && (!isTargetHod || reportsDirectlyToHod)) {
         setError('Head of Department (HOD) is required.');
         toast.warning('Head of Department is required.', 'Validation Error');
         return;
@@ -882,6 +893,11 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
           toast.success(`Relieving date saved for ${name.trim()} (${employeeCode.trim()}).`, 'Record Updated');
         } else {
           const parsedCtc = Number(currentCtc);
+          const finalManagerIds = reportsDirectlyToHod
+            ? []
+            : [managerId, secondaryManagerId].filter(Boolean);
+          const finalPrimaryManagerId = finalManagerIds[0] || undefined;
+
           await api.updateEmployee(targetEmp.id, {
             employeeCode: employeeCode.trim().toUpperCase(),
             name: name.trim(),
@@ -898,7 +914,9 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
             companyName: companyName.trim() || undefined,
             cycleId,
             startingReviewPeriodId,
-            managerId: managerId || undefined,
+            managerId: finalPrimaryManagerId,
+            managerIds: finalManagerIds,
+            reportsDirectlyToHod,
             hodId: hodId || undefined,
             currentKraTemplateId: kraAssignmentMode === 'TEMPLATE' ? currentKraTemplateId || undefined : undefined,
             customKras: validCustomKras,
@@ -922,6 +940,11 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
         onSaved();
         handleClose();
       } else {
+        const finalManagerIds = reportsDirectlyToHod
+          ? []
+          : [managerId, secondaryManagerId].filter(Boolean);
+        const finalPrimaryManagerId = finalManagerIds[0] || undefined;
+
         const res = await api.createEmployee({
           employeeCode: employeeCode.trim().toUpperCase(),
           name: name.trim(),
@@ -938,7 +961,9 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
           companyName: companyName.trim() || undefined,
           cycleId,
           startingReviewPeriodId,
-          managerId: managerId || undefined,
+          managerId: finalPrimaryManagerId,
+          managerIds: finalManagerIds,
+          reportsDirectlyToHod,
           hodId: hodId || undefined,
           currentKraTemplateId: kraAssignmentMode === 'TEMPLATE' ? currentKraTemplateId || undefined : undefined,
           customKras: validCustomKras,
@@ -1823,44 +1848,73 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
                 )}
               </div>
 
+              <div className="flex items-center justify-between py-1.5 px-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-700/60">
+                <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={reportsDirectlyToHod}
+                    disabled={isInactive}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setReportsDirectlyToHod(checked);
+                      if (checked) {
+                        setManagerId('');
+                        setSecondaryManagerId('');
+                      }
+                    }}
+                    className="rounded border-slate-300 dark:border-slate-600 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer disabled:opacity-60"
+                  />
+                  <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                    Reports directly to HOD <span className="text-slate-400 font-normal text-[11px]">(Skip L1 Manager)</span>
+                  </span>
+                </label>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 {/* Reporting Manager (L1) */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Reporting Manager {isTargetHod ? '(Optional for HOD)' : '(L1)'}{' '}
-                    {!isTargetHod && <span className="text-rose-500">*</span>}
-                  </label>
-                  <select
-                    required={!isTargetHod}
-                    disabled={isInactive}
-                    value={managerId}
-                    onChange={(e) => setManagerId(e.target.value)}
-                    className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-600/10 focus:border-indigo-500 font-medium disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-100 dark:disabled:bg-slate-800/60"
-                  >
-                    <option value="" disabled={!isTargetHod}>
-                      {isTargetHod ? 'Direct Department Head / No L1 Manager' : 'Select Reporting Manager *'}
-                    </option>
-                    {departmentManagers.map((emp) => (
-                      <option key={emp.id} value={emp.id}>
-                        {emp.name} ({emp.designationName || emp.systemRole || 'Manager'}{emp.departmentName ? ` • ${emp.departmentName}` : ''})
+                {reportsDirectlyToHod ? (
+                  <div className="p-3 rounded-xl bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 flex items-center gap-2 text-xs text-indigo-800 dark:text-indigo-300">
+                    <Users className="w-4 h-4 shrink-0 text-indigo-600 dark:text-indigo-400" />
+                    <span>Direct HOD routing active: Reviews and appraisals route directly to the HOD without an intermediate manager.</span>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Reporting Manager {isTargetHod ? '(Optional for HOD)' : '(L1)'}{' '}
+                      {!isTargetHod && <span className="text-rose-500">*</span>}
+                    </label>
+                    <select
+                      required={!isTargetHod && !reportsDirectlyToHod}
+                      disabled={isInactive}
+                      value={managerId}
+                      onChange={(e) => setManagerId(e.target.value)}
+                      className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-600/10 focus:border-indigo-500 font-medium disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-100 dark:disabled:bg-slate-800/60"
+                    >
+                      <option value="" disabled={!isTargetHod}>
+                        {isTargetHod ? 'Direct Department Head / No L1 Manager' : 'Select Reporting Manager *'}
                       </option>
-                    ))}
-                  </select>
-                </div>
+                      {departmentManagers.map((emp) => (
+                        <option key={emp.id} value={emp.id}>
+                          {emp.name} ({emp.designationName || emp.systemRole || 'Manager'}{emp.departmentName ? ` • ${emp.departmentName}` : ''})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 {/* Head of Department (HOD) */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Head of Dept (HOD) {isTargetHod ? '(Optional for HOD)' : <span className="text-rose-500">*</span>}
+                    Head of Dept (HOD) {isTargetHod && !reportsDirectlyToHod ? '(Optional for HOD)' : <span className="text-rose-500">*</span>}
                   </label>
                   <select
-                    required={!isTargetHod}
+                    required={!isTargetHod || reportsDirectlyToHod}
                     disabled={isInactive}
                     value={hodId}
                     onChange={(e) => setHodId(e.target.value)}
                     className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-600/10 focus:border-indigo-500 font-medium disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-100 dark:disabled:bg-slate-800/60"
                   >
-                    <option value="" disabled={!isTargetHod}>
+                    <option value="" disabled={!isTargetHod && !reportsDirectlyToHod}>
                       {isTargetHod ? 'Self / Executive Head of Department' : 'Select Head of Department (HOD) *'}
                     </option>
                     {departmentHods.map((emp) => {
@@ -1873,6 +1927,30 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
                     })}
                   </select>
                 </div>
+
+                {/* Secondary Manager (Optional / Dotted-line) */}
+                {!reportsDirectlyToHod && managerId && (
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Secondary Manager <span className="text-slate-400 font-normal text-[11px]">(Optional • Dual reporting / Dotted-line)</span>
+                    </label>
+                    <select
+                      disabled={isInactive}
+                      value={secondaryManagerId}
+                      onChange={(e) => setSecondaryManagerId(e.target.value)}
+                      className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-600/10 focus:border-indigo-500 font-medium disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-100 dark:disabled:bg-slate-800/60"
+                    >
+                      <option value="">— No secondary manager —</option>
+                      {departmentManagers
+                        .filter((emp) => emp.id !== managerId)
+                        .map((emp) => (
+                          <option key={emp.id} value={emp.id}>
+                            {emp.name} ({emp.designationName || emp.systemRole || 'Manager'}{emp.departmentName ? ` • ${emp.departmentName}` : ''})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                )}
               </div>
 
               {/* KRA / Performance Scorecard Section */}

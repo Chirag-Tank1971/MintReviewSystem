@@ -34,7 +34,8 @@ export interface DashboardTaskLink {
     | 'hierarchy'
     | 'audit'
     | 'calibration'
-    | 'management';
+    | 'management'
+    | 'sales_champs';
   params?: Record<string, string | number | boolean>;
 }
 

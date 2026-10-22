@@ -1028,6 +1028,24 @@ export const BulkImportExportManager: React.FC<BulkImportExportManagerProps> = (
                     )}
                   </div>
 
+                  {/* Cancel Button */}
+                  <button
+                    onClick={() => {
+                      setValidationReport(null);
+                      setParsedRows([]);
+                      setFileName('');
+                      setFileNames([]);
+                      setStatusFilter('ALL');
+                      setImportResult(null);
+                      if (fileInputRef.current) fileInputRef.current.value = '';
+                    }}
+                    disabled={isImporting}
+                    className="flex items-center gap-2 py-2 px-4 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white font-bold text-xs shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    <XCircle className="w-4 h-4" />
+                    Cancel
+                  </button>
+
                   {/* Primary Commit Button */}
                   <button
                     onClick={handleExecuteImport}

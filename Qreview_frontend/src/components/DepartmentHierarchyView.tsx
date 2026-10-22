@@ -89,9 +89,12 @@ export const DepartmentHierarchyView: React.FC<DepartmentHierarchyViewProps> = (
       });
 
       employees.forEach((e) => {
-        if (e.managerId && deptMembers.some((dm) => dm.id === e.managerId)) {
-          managerIdsSet.add(e.managerId);
-        }
+        const mIds = e.managerIds && e.managerIds.length > 0 ? e.managerIds : (e.managerId ? [e.managerId] : []);
+        mIds.forEach((mId) => {
+          if (deptMembers.some((dm) => dm.id === mId)) {
+            managerIdsSet.add(mId);
+          }
+        });
       });
 
       // Exclude HOD from managers list if HOD is displayed separately
@@ -104,7 +107,7 @@ export const DepartmentHierarchyView: React.FC<DepartmentHierarchyViewProps> = (
         const manager = empMap.get(mId);
         if (manager) {
           const directReports = employees.filter(
-            (e) => e.managerId === manager.id && e.id !== manager.id
+            (e) => (e.managerId === manager.id || Boolean(e.managerIds?.includes(manager.id))) && e.id !== manager.id
           );
           managersWithReports.push({
             manager,
@@ -119,7 +122,9 @@ export const DepartmentHierarchyView: React.FC<DepartmentHierarchyViewProps> = (
       const managerIds = new Set(managersWithReports.map((m) => m.manager.id));
       const directToHodOrUnassigned = deptMembers.filter((e) => {
         if (hod && e.id === hod.id) return false;
+        if (e.reportsDirectlyToHod) return true;
         if (e.managerId && managerIds.has(e.managerId)) return false;
+        if (e.managerIds?.some((mId) => managerIds.has(mId))) return false;
         return true;
       });
 
@@ -447,7 +452,7 @@ export const DepartmentHierarchyView: React.FC<DepartmentHierarchyViewProps> = (
           {filteredHierarchy.map((deptData) => {
             const { department, hod, totalHeadcount, activeHeadcount, managersWithReports, directToHodOrUnassigned } = deptData;
             const isOpen = isSearching || Boolean(expandedDepts[department.id]);
-            const withoutManager = directToHodOrUnassigned.filter((e) => !e.managerId).length;
+            const withoutManager = directToHodOrUnassigned.filter((e) => !e.managerId && !e.reportsDirectlyToHod).length;
 
             return (
               <div key={department.id}>
@@ -550,9 +555,14 @@ export const DepartmentHierarchyView: React.FC<DepartmentHierarchyViewProps> = (
                                       exit="collapsed"
                                       className="ml-3 pl-4 border-l border-slate-200 dark:border-slate-700"
                                     >
-                                      {directReports.map((emp) => (
-                                        <li key={emp.id}>{renderPerson(emp)}</li>
-                                      ))}
+                                      {directReports.map((emp) => {
+                                        const isSecondary = emp.managerIds?.[1] === manager.id;
+                                        return (
+                                          <li key={emp.id}>
+                                            {renderPerson(emp, { tag: isSecondary ? 'Dotted Line' : undefined })}
+                                          </li>
+                                        );
+                                      })}
                                     </m.ul>
                                   )}
                                 </AnimatePresence>
@@ -568,7 +578,10 @@ export const DepartmentHierarchyView: React.FC<DepartmentHierarchyViewProps> = (
                               <ul className="ml-3 pl-4 border-l border-slate-200 dark:border-slate-700">
                                 {directToHodOrUnassigned.map((emp) => (
                                   <li key={emp.id}>
-                                    {renderPerson(emp, { flag: !emp.managerId ? 'No manager' : undefined })}
+                                    {renderPerson(emp, {
+                                      tag: emp.reportsDirectlyToHod ? 'Direct to HOD' : undefined,
+                                      flag: !emp.managerId && !emp.reportsDirectlyToHod ? 'No manager' : undefined,
+                                    })}
                                   </li>
                                 ))}
                               </ul>

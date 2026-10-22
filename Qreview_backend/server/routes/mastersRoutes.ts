@@ -808,6 +808,8 @@ mastersRouter.post('/employees', requireRoles('SUPER_ADMIN', 'HR'), async (req: 
       relievingDate,
       pastEmployeeDate,
       managerId,
+      managerIds,
+      reportsDirectlyToHod,
       hodId,
       cycleId,
       startingReviewPeriodId,
@@ -853,17 +855,37 @@ mastersRouter.post('/employees', requireRoles('SUPER_ADMIN', 'HR'), async (req: 
     }
 
     // Validate Reporting Manager & HOD
-    let managerName: string | undefined;
-    if (managerId) {
-      const mgr = await empCol.findOne({ id: managerId });
-      if (!mgr) {
-        return res.status(400).json({ error: 'Selected Reporting Manager was not found in the employee directory.' });
+    const isDirectToHod = Boolean(reportsDirectlyToHod);
+    let finalManagerIds: string[] = [];
+    let finalManagerNames: string[] = [];
+    let primaryManagerId: string | undefined;
+    let primaryManagerName: string | undefined;
+
+    if (isDirectToHod) {
+      if (!hodId && !isTargetHod && status !== 'INACTIVE') {
+        return res.status(400).json({ error: 'Head of Department (HOD) is required for direct HOD reporting.' });
       }
-      managerName = mgr.name;
-    } else if (!isTargetHod && status !== 'INACTIVE') {
-      return res.status(400).json({
-        error: 'Reporting Manager is required. Self-managed employees are not permitted.',
-      });
+    } else {
+      const inputManagerIds = Array.isArray(managerIds) && managerIds.length > 0
+        ? managerIds.filter(Boolean).slice(0, 2)
+        : managerId ? [managerId] : [];
+
+      if (inputManagerIds.length > 0) {
+        for (const mId of inputManagerIds) {
+          const mgr = await empCol.findOne({ id: mId });
+          if (!mgr) {
+            return res.status(400).json({ error: `Selected Reporting Manager (${mId}) was not found in the employee directory.` });
+          }
+          finalManagerIds.push(mId);
+          finalManagerNames.push(mgr.name);
+        }
+        primaryManagerId = finalManagerIds[0];
+        primaryManagerName = finalManagerNames[0];
+      } else if (!isTargetHod && status !== 'INACTIVE') {
+        return res.status(400).json({
+          error: 'Reporting Manager is required. Self-managed employees are not permitted.',
+        });
+      }
     }
 
     let hodName: string | undefined;
@@ -1007,8 +1029,11 @@ mastersRouter.post('/employees', requireRoles('SUPER_ADMIN', 'HR'), async (req: 
       designationId,
       designationName: des?.name || 'Designation',
       joiningDate: new Date(joiningDate).toISOString(),
-      managerId: managerId || undefined,
-      managerName,
+      managerId: primaryManagerId,
+      managerName: primaryManagerName,
+      managerIds: finalManagerIds,
+      managerNames: finalManagerNames,
+      reportsDirectlyToHod: isDirectToHod,
       hodId: hodId || undefined,
       hodName,
       cycleId,
@@ -1176,6 +1201,8 @@ mastersRouter.put('/employees/:id', requireRoles('SUPER_ADMIN', 'HR'), async (re
       relievingDate,
       pastEmployeeDate,
       managerId,
+      managerIds,
+      reportsDirectlyToHod,
       hodId,
       cycleId,
       startingReviewPeriodId,
@@ -1418,31 +1445,89 @@ mastersRouter.put('/employees/:id', requireRoles('SUPER_ADMIN', 'HR'), async (re
       effectiveRole === 'HOD' ||
       Boolean(currentDes && (currentDes.level >= 4 || currentDes.name?.toLowerCase().includes('vp') || currentDes.name?.toLowerCase().includes('head')));
 
-    if (managerId !== undefined) {
+    const isDirectToHod = reportsDirectlyToHod !== undefined ? Boolean(reportsDirectlyToHod) : Boolean(emp.reportsDirectlyToHod);
+    if (reportsDirectlyToHod !== undefined) {
+      updateData.reportsDirectlyToHod = isDirectToHod;
+    }
+
+    if (isDirectToHod) {
+      // Direct reporting to HOD: clear L1 manager fields
+      updateData.managerIds = [];
+      updateData.managerNames = [];
+      updateData.managerId = undefined;
+      updateData.managerName = undefined;
+    } else if (managerIds !== undefined) {
+      if (!Array.isArray(managerIds)) {
+        return res.status(400).json({ error: 'managerIds must be an array.' });
+      }
+      if (managerIds.includes(id)) {
+        return res.status(400).json({ error: 'An employee cannot be their own manager.' });
+      }
+      const cleanManagerIds = managerIds.filter(Boolean).slice(0, 2);
+      if (cleanManagerIds.length === 0 && !isTargetHod && status !== 'INACTIVE' && emp.status !== 'INACTIVE') {
+        return res.status(400).json({ error: 'Reporting Manager is required. Self-managed employees are not permitted.' });
+      }
+
+      const resolvedNames: string[] = [];
+      for (const mId of cleanManagerIds) {
+        const mgr = await empCol.findOne({ id: mId });
+        if (!mgr) {
+          return res.status(400).json({ error: `Selected Reporting Manager (${mId}) was not found in the employee directory.` });
+        }
+        resolvedNames.push(mgr.name);
+      }
+      updateData.managerIds = cleanManagerIds;
+      updateData.managerNames = resolvedNames;
+      updateData.managerId = cleanManagerIds[0] || undefined;
+      updateData.managerName = resolvedNames[0] || undefined;
+
+      // Cascade primary manager update to open quarterly reviews & appraisals
+      if (updateData.managerId) {
+        await reviewsCol.updateMany(
+          { employeeId: id, isClosed: { $ne: true }, status: { $ne: 'CLOSED' } },
+          { $set: { managerId: updateData.managerId, managerName: updateData.managerName } }
+        );
+        await appraisalsCol.updateMany(
+          { employeeId: id, isLocked: { $ne: true }, status: { $ne: 'LOCKED' } },
+          { $set: { managerId: updateData.managerId, managerName: updateData.managerName } }
+        );
+      }
+    } else if (managerId !== undefined) {
       if (!managerId && !isTargetHod && status !== 'INACTIVE' && emp.status !== 'INACTIVE') {
         return res.status(400).json({ error: 'Reporting Manager is required. Self-managed employees are not permitted.' });
       }
       if (managerId) {
+        if (managerId === id) {
+          return res.status(400).json({ error: 'An employee cannot be their own manager.' });
+        }
         const mgr = await empCol.findOne({ id: managerId });
         if (!mgr) {
           return res.status(400).json({ error: 'Selected Reporting Manager was not found in the employee directory.' });
         }
         updateData.managerId = managerId;
         updateData.managerName = mgr.name;
+        updateData.managerIds = [managerId];
+        updateData.managerNames = [mgr.name];
 
-        // Cascade manager update to open quarterly reviews
+        // Cascade manager update to open quarterly reviews & appraisals
         await reviewsCol.updateMany(
           { employeeId: id, isClosed: { $ne: true }, status: { $ne: 'CLOSED' } },
+          { $set: { managerId, managerName: mgr.name } }
+        );
+        await appraisalsCol.updateMany(
+          { employeeId: id, isLocked: { $ne: true }, status: { $ne: 'LOCKED' } },
           { $set: { managerId, managerName: mgr.name } }
         );
       } else {
         updateData.managerId = undefined;
         updateData.managerName = undefined;
+        updateData.managerIds = [];
+        updateData.managerNames = [];
       }
     }
 
     if (hodId !== undefined) {
-      if (!hodId && !isTargetHod && status !== 'INACTIVE' && emp.status !== 'INACTIVE') {
+      if (!hodId && (!isTargetHod || isDirectToHod) && status !== 'INACTIVE' && emp.status !== 'INACTIVE') {
         return res.status(400).json({ error: 'Head of Department (HOD) is required.' });
       }
       if (hodId) {

@@ -14,6 +14,7 @@ import {
   Loader2,
   ShieldCheck,
   RotateCcw,
+  Users,
 } from 'lucide-react';
 import { Appraisal, Designation, User as AuthUser, DepartmentBudgetSnapshot } from '../types';
 import { api } from '../services/api';
@@ -49,24 +50,34 @@ export const AppraisalDetailModal: React.FC<AppraisalDetailModalProps> = ({
   const [confirmActionType, setConfirmActionType] = useState<'MANAGER' | 'HOD' | 'HOD_RETURN' | 'HR_APPROVE' | 'LOCK' | null>(null);
   const [hodReturnReason, setHodReturnReason] = useState<string>('');
 
+  const userEmpId = currentUser?.employeeId;
+  const userId = currentUser?.id;
+  const activeManagerId =
+    (userEmpId && appraisal.managerIds?.includes(userEmpId)) ? userEmpId :
+    (userId && appraisal.managerIds?.includes(userId)) ? userId :
+    (userEmpId === appraisal.managerId || userId === appraisal.managerId) ? (userEmpId || userId) :
+    null;
+  const myRec = activeManagerId && appraisal.managerRecommendations ? appraisal.managerRecommendations[activeManagerId] : null;
+
   // Form states
   const [incrementPercent, setIncrementPercent] = useState<number>(
-    appraisal.approvedIncrementPercentage ??
+    myRec?.suggestedIncrementPercent ??
+      appraisal.approvedIncrementPercentage ??
       appraisal.proposedIncrementPercentage ??
       appraisal.suggestedIncrementMin ??
       (appraisal.averageQuarterlyScore > 0 ? 10 : 0)
   );
   const [promotionRecommended, setPromotionRecommended] = useState<boolean>(
-    appraisal.promotionRecommended || false
+    myRec?.promotionRecommended !== undefined ? myRec.promotionRecommended : (appraisal.promotionRecommended || false)
   );
   const [promotionDesignationId, setPromotionDesignationId] = useState<string>(
-    appraisal.promotionDesignationId || ''
+    myRec?.promotionDesignationId || appraisal.promotionDesignationId || ''
   );
   const [justification, setJustification] = useState<string>(
-    appraisal.managerRecommendation?.justification || ''
+    myRec?.justification || appraisal.managerRecommendation?.justification || ''
   );
-  const [strengthsSummary] =useState<string>(
-    appraisal.managerRecommendation?.strengthsSummary || ''
+  const [strengthsSummary] = useState<string>(
+    myRec?.strengthsSummary || appraisal.managerRecommendation?.strengthsSummary || ''
   );
   const [hodNotes, setHodNotes] = useState<string>(
     appraisal.hodCalibration?.notes || ''
@@ -128,7 +139,10 @@ export const AppraisalDetailModal: React.FC<AppraisalDetailModalProps> = ({
   const canActInElevatedCapacity = userRole !== 'EMPLOYEE';
   const isManager =
     canActInElevatedCapacity &&
-    (appraisal.managerId === currentUser?.employeeId || appraisal.managerId === currentUser?.id);
+    (appraisal.managerId === currentUser?.employeeId ||
+     appraisal.managerId === currentUser?.id ||
+     Boolean(currentUser?.employeeId && appraisal.managerIds?.includes(currentUser.employeeId)) ||
+     Boolean(currentUser?.id && appraisal.managerIds?.includes(currentUser.id)));
   const isHod = canActInElevatedCapacity && appraisal.hodId === currentUser?.employeeId;
   const isHr = userRole === 'HR' || userRole === 'SUPER_ADMIN';
   const isSuperAdmin = userRole === 'SUPER_ADMIN';
@@ -635,6 +649,48 @@ export const AppraisalDetailModal: React.FC<AppraisalDetailModalProps> = ({
                     </p>
                   </div>
                 </div>
+
+                {/* Dual Manager Appraisal Recommendation Banner */}
+                {appraisal.managerIds && appraisal.managerIds.length > 1 && (
+                  <div className="rounded-xl border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/70 dark:bg-indigo-950/30 p-4 space-y-2.5">
+                    <div className="flex items-center gap-2 text-xs font-bold text-indigo-950 dark:text-indigo-200">
+                      <Users className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" aria-hidden="true" />
+                      Dual Manager Recommendation Structure
+                    </div>
+                    <p className="text-xs text-indigo-900/80 dark:text-indigo-300 leading-relaxed">
+                      This employee reports to 2 managers. Both managers submit increment and promotion recommendations separately. Once both have submitted, the recommendations are combined and forwarded for HOD calibration.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                      {appraisal.managerIds.map((mId, i) => {
+                        const mName = appraisal.managerNames?.[i] || (i === 0 ? appraisal.managerName : `Manager ${i + 1}`);
+                        const rec = appraisal.managerRecommendations?.[mId];
+                        const isMe = currentUser?.employeeId === mId || currentUser?.id === mId;
+                        return (
+                          <div
+                            key={mId}
+                            className="flex items-center justify-between text-xs bg-white dark:bg-slate-900/80 px-3 py-2 rounded-lg border border-indigo-100 dark:border-indigo-900/40"
+                          >
+                            <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                              {mName}
+                              {isMe && (
+                                <span className="text-[10px] bg-indigo-100 text-indigo-700 dark:bg-indigo-900/70 dark:text-indigo-300 px-1.5 py-0.5 rounded font-bold">
+                                  You
+                                </span>
+                              )}
+                            </span>
+                            {rec ? (
+                              <span className="text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                                Submitted (+{rec.suggestedIncrementPercent}%{rec.promotionRecommended ? ', Promo' : ''})
+                              </span>
+                            ) : (
+                              <span className="text-amber-700 dark:text-amber-400 font-medium">Pending recommendation</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {/* Live Salary Calibration Playground / Approved Settings */}
                 <div className="p-5 bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700/80 rounded-xl space-y-5">

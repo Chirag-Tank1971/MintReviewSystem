@@ -272,7 +272,9 @@ reviewRouter.get('/reviews', async (req: AuthenticatedRequest, res: Response) =>
           r.managerId === req.user?.id ||
           r.employeeId === req.user?.employeeId ||
           empRecord?.managerId === req.user?.employeeId ||
-          empRecord?.managerId === req.user?.id
+          empRecord?.managerId === req.user?.id ||
+          Boolean(empRecord?.managerIds?.includes(req.user?.employeeId ?? '')) ||
+          Boolean(empRecord?.managerIds?.includes(req.user?.id ?? ''))
         );
       });
     } else if (req.user?.role === 'HOD') {
@@ -299,7 +301,9 @@ reviewRouter.get('/reviews', async (req: AuthenticatedRequest, res: Response) =>
       reviews = reviews.filter((r) => {
         const empRecord = empMap.get(r.employeeId);
         return (
-          (r.managerId === req.user?.employeeId || empRecord?.managerId === req.user?.employeeId) &&
+          (r.managerId === req.user?.employeeId ||
+            empRecord?.managerId === req.user?.employeeId ||
+            Boolean(empRecord?.managerIds?.includes(req.user?.employeeId ?? ''))) &&
           r.employeeId !== req.user?.employeeId
         );
       });
@@ -391,7 +395,9 @@ reviewRouter.get('/reviews/stats', async (req: AuthenticatedRequest, res: Respon
           r.managerId === req.user?.id ||
           r.employeeId === req.user?.employeeId ||
           empRecord?.managerId === req.user?.employeeId ||
-          empRecord?.managerId === req.user?.id
+          empRecord?.managerId === req.user?.id ||
+          Boolean(empRecord?.managerIds?.includes(req.user?.employeeId ?? '')) ||
+          Boolean(empRecord?.managerIds?.includes(req.user?.id ?? ''))
         );
       });
     } else if (req.user?.role === 'HOD') {
@@ -998,6 +1004,9 @@ reviewRouter.post(
           isAppraisalMonthDue,
           managerId: emp.managerId || emp.hodId || '',
           managerName: emp.managerName || emp.hodName || 'Unassigned Manager',
+          managerIds: emp.managerIds || (emp.managerId ? [emp.managerId] : []),
+          managerNames: emp.managerNames || (emp.managerName ? [emp.managerName] : []),
+          reportsDirectlyToHod: emp.reportsDirectlyToHod,
           hodId: emp.hodId,
           hodName: emp.hodName,
           status: 'MANAGER_PENDING',
@@ -1020,7 +1029,11 @@ reviewRouter.post(
       }
 
       // Notify managers about new reviews
-      const distinctManagerIds = Array.from(new Set(newReviews.map(r => r.managerId).filter((m): m is string => Boolean(m))));
+      const distinctManagerIds = Array.from(
+        new Set(
+          newReviews.flatMap((r) => (r.managerIds && r.managerIds.length > 0 ? r.managerIds : [r.managerId])).filter((m): m is string => Boolean(m))
+        )
+      );
       for (const mgrId of distinctManagerIds) {
         await notifCol.insertOne({
           id: `notif_${Date.now()}_${mgrId}`,
@@ -1114,7 +1127,10 @@ reviewRouter.put(
     // Role check: Only assigned reporting manager, HR, or Super Admin can score. HOD cannot score reviews.
     const isAssignedManager =
       (req.user?.role === 'REPORTING_MANAGER' || req.user?.role === 'MANAGER') &&
-      (req.user?.employeeId === existing.managerId || req.user?.id === existing.managerId);
+      (req.user?.employeeId === existing.managerId ||
+       req.user?.id === existing.managerId ||
+       Boolean(req.user?.employeeId && existing.managerIds?.includes(req.user.employeeId)) ||
+       Boolean(req.user?.id && existing.managerIds?.includes(req.user.id)));
     const isSuperAdminOrHr = req.user?.role === 'SUPER_ADMIN' || req.user?.role === 'HR';
 
     if (!isAssignedManager && !isSuperAdminOrHr) {
@@ -1134,48 +1150,58 @@ reviewRouter.put(
 
     const isSubmitting = !isDraft;
 
+    // Detect assigned managers and dual-scoring workflow
+    const assignedManagerIds: string[] =
+      existing.managerIds && existing.managerIds.length > 0
+        ? existing.managerIds
+        : (existing.managerId ? [existing.managerId] : []);
+    const isDualManager = assignedManagerIds.length > 1;
+    const activeManagerId =
+      req.user?.employeeId && assignedManagerIds.includes(req.user.employeeId)
+        ? req.user.employeeId
+        : req.user?.id && assignedManagerIds.includes(req.user.id)
+        ? req.user.id
+        : assignedManagerIds[0] || req.user?.employeeId || req.user?.id || existing.managerId;
+
     // If HR returned this review directly to the manager (status 'RETURNED'), resubmission
     // must go straight back to HR — not through HOD again. HOD's own score (if any) is left
     // completely untouched here; only the manager's fields are ever written by this route.
     const wasReturnedByHrToManager = existing.status === 'RETURNED';
 
-    let newStatus: ReviewStatus = existing.status;
-    let submittedByManager = false;
-    let skippedHodForHrReturn = false;
-    if (isSubmitting) {
-      if (existing.reviewType === 'PIP_WEEKLY') {
-        // 2-step fast flow: weekly PIP reviews close directly upon manager scoring without HOD/HR escalation
-        newStatus = 'CLOSED';
-        submittedByManager = true;
-      } else if (req.user?.role === 'HR' || req.user?.role === 'SUPER_ADMIN') {
-        newStatus = 'HR_COMPLETED';
-      } else if (wasReturnedByHrToManager) {
-        newStatus = 'HR_PENDING';
-        skippedHodForHrReturn = true;
-      } else {
-        // Manager submissions must pass through the mandatory HOD stage first.
-        newStatus = 'HOD_PENDING';
-        submittedByManager = true;
-      }
-    }
-    // Weekly PIP reviews never route to HOD, so a missing HOD is not an alert-worthy gap there
-    const managerSubmitHodMissing = submittedByManager && !existing.hodId && existing.reviewType !== 'PIP_WEEKLY';
-
-    // Merge ONLY the manager-owned fields onto the stored snapshot (matched by id). Self and
-    // HOD fields, weights and targets always come from the stored review, never the client.
+    // Merge incoming manager ratings onto the stored snapshot (matched by id)
     const incomingList: any[] = Array.isArray(kraSnapshot) ? kraSnapshot : [];
     const mergedSnapshot: ReviewKraSnapshot[] = (existing.kraSnapshot || []).map((stored) => {
       const k =
         incomingList.find((inc) => inc.id === stored.id) ||
         incomingList.find((inc) => inc.kraId && inc.kraId === stored.kraId);
       if (!k) return stored;
+
+      const ratingVal = Number(k.rating) || 0;
+      const achievementVal = k.achievement || '';
+      const commentsVal = k.comments || '';
+      const justificationVal = k.ratingJustification || '';
+
+      const managerRatings = { ...(stored.managerRatings || {}) };
+      if (activeManagerId && (isAssignedManager || isSuperAdminOrHr)) {
+        managerRatings[activeManagerId] = {
+          managerId: activeManagerId,
+          managerName: req.user?.name || 'Manager',
+          rating: ratingVal,
+          achievement: achievementVal,
+          comments: commentsVal,
+          ratingJustification: justificationVal,
+          submittedAt: isSubmitting ? new Date().toISOString() : undefined,
+        };
+      }
+
       return {
         ...stored,
-        rating: Number(k.rating) || 0,
-        achievement: k.achievement || '',
-        comments: k.comments || '',
+        rating: ratingVal,
+        achievement: achievementVal,
+        comments: commentsVal,
         issueReason: k.issueReason ?? stored.issueReason,
-        ratingJustification: k.ratingJustification || '',
+        ratingJustification: justificationVal,
+        managerRatings,
       };
     });
 
@@ -1190,7 +1216,7 @@ reviewRouter.put(
         responses: returnResponses,
         isDraft: !isSubmitting,
         user: { id: req.user?.id || 'system', name: req.user?.name || 'Manager' },
-        routesToHod: newStatus === 'HOD_PENDING',
+        routesToHod: true,
         returnSlaDays: returnPolicy.returnSlaDays,
       });
     } catch (validationErr: any) {
@@ -1199,25 +1225,87 @@ reviewRouter.put(
     const updatedSnapshot = returnEdits.snapshot;
     const resolvedReturn = returnEdits.resolvedRequest;
 
+    // Calculate real-time weighted score for this submission: sum(rating * weight) / 100
+    const thisManagerWeightedScore = updatedSnapshot.reduce(
+      (sum, k) => sum + ((Number(k.rating) || 0) * (Number(k.weight) || 0)) / 100,
+      0
+    );
+    let managerScore = Number(thisManagerWeightedScore.toFixed(2));
+
+    // Dual Manager Submission Tracking
+    const managerSubmissions = { ...(existing.managerSubmissions || {}) };
+    if (isSubmitting && activeManagerId && (isAssignedManager || isSuperAdminOrHr)) {
+      managerSubmissions[activeManagerId] = {
+        managerId: activeManagerId,
+        managerName: req.user?.name || 'Manager',
+        submitted: true,
+        submittedAt: new Date().toISOString(),
+        score: managerScore,
+        strengths: strengths !== undefined ? strengths : existing.strengths,
+        improvements: improvements !== undefined ? improvements : existing.improvements,
+        managerOverallComments:
+          managerOverallComments !== undefined ? managerOverallComments : existing.managerOverallComments,
+      };
+    }
+
+    const allManagersSubmitted =
+      !isDualManager || assignedManagerIds.every((mId) => managerSubmissions[mId]?.submitted);
+
+    let newStatus: ReviewStatus = existing.status;
+    let submittedByManager = false;
+    let skippedHodForHrReturn = false;
+
+    if (isSubmitting) {
+      if (existing.reviewType === 'PIP_WEEKLY') {
+        newStatus = 'CLOSED';
+        submittedByManager = true;
+      } else if (req.user?.role === 'HR' || req.user?.role === 'SUPER_ADMIN') {
+        newStatus = 'HR_COMPLETED';
+      } else if (!allManagersSubmitted) {
+        // Dual manager: one manager submitted, keep MANAGER_PENDING until the other completes
+        newStatus = 'MANAGER_PENDING';
+        submittedByManager = false;
+      } else if (wasReturnedByHrToManager) {
+        newStatus = 'HR_PENDING';
+        skippedHodForHrReturn = true;
+        submittedByManager = true;
+      } else {
+        newStatus = 'HOD_PENDING';
+        submittedByManager = true;
+      }
+    }
+
     // HR returned to both: the Manager's resubmission goes to the HOD (not straight to HR).
     const activatedHodLeg = returnEdits.activatedRequest;
-    if (activatedHodLeg) {
+    if (activatedHodLeg && allManagersSubmitted) {
       newStatus = 'HOD_PENDING';
       skippedHodForHrReturn = false;
     }
 
-    // Calculate real-time weighted score: sum(rating * weight) / 100
-    const totalWeightedScore = updatedSnapshot.reduce(
-      (sum, k) => sum + ((Number(k.rating) || 0) * (Number(k.weight) || 0)) / 100,
-      0
-    );
-    const managerScore = Number(totalWeightedScore.toFixed(2));
+    // If both managers have submitted in a dual-manager review, calculate combined ratings
+    if (isDualManager && allManagersSubmitted) {
+      for (const k of updatedSnapshot) {
+        const ratingsForKra = assignedManagerIds
+          .map((mId) => k.managerRatings?.[mId]?.rating)
+          .filter((r): r is number => typeof r === 'number' && r > 0);
+        if (ratingsForKra.length > 0) {
+          k.rating = Number((ratingsForKra.reduce((a, b) => a + b, 0) / ratingsForKra.length).toFixed(2));
+        }
+      }
+      const scores = assignedManagerIds
+        .map((mId) => managerSubmissions[mId]?.score)
+        .filter((s): s is number => typeof s === 'number' && s > 0);
+      if (scores.length > 0) {
+        managerScore = Number((scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2));
+      }
+    }
+
+    const managerSubmitHodMissing = submittedByManager && !existing.hodId && existing.reviewType !== 'PIP_WEEKLY';
 
     // Official finalScore: Manager's own score until HOD has also independently scored,
-    // at which point it becomes the average of the two. HOD's own score is never altered here,
-    // except that resolving an HOD return resets it until the HOD re-scores the revised KRAs.
+    // at which point it becomes the average of the two.
     const effectiveHodScore = returnEdits.clearedHodScore ? undefined : existing.hodScore;
-    const finalScore =
+    let finalScore =
       effectiveHodScore !== undefined && effectiveHodScore !== null
         ? Number(((managerScore + effectiveHodScore) / 2).toFixed(2))
         : managerScore;
@@ -1226,15 +1314,27 @@ reviewRouter.put(
     const userName = req.user?.name || (userRole === 'HOD' ? 'Department HOD' : userRole === 'HR' ? 'HR Administrator' : 'Manager');
     const roleLabel = userRole === 'HOD' ? 'HOD' : userRole === 'HR' ? 'HR' : 'Manager';
 
+    const isPartialSubmit = isSubmitting && isDualManager && !allManagersSubmitted;
+
     const action: ReviewAction = {
       id: `act_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
       reviewId: id,
-      action: managerSubmitHodMissing ? 'HOD_MISSING_EXCEPTION' : resolvedReturn ? 'RESUBMITTED' : isSubmitting ? 'SUBMITTED' : 'DRAFT_SAVED',
+      action: managerSubmitHodMissing
+        ? 'HOD_MISSING_EXCEPTION'
+        : isPartialSubmit
+        ? 'MANAGER_PARTIAL_SUBMITTED'
+        : resolvedReturn
+        ? 'RESUBMITTED'
+        : isSubmitting
+        ? 'SUBMITTED'
+        : 'DRAFT_SAVED',
       performedBy: req.user?.id || 'system',
       performedByName: userName,
       performedByRole: userRole,
       remarks: managerSubmitHodMissing
         ? `${roleLabel} submitted evaluation scores with final weighted score: ${finalScore}. No HOD is configured for ${existing.employeeName} — review is blocked pending HOD assignment.`
+        : isPartialSubmit
+        ? `${userName} submitted manager evaluation scores (${managerScore}/5). Awaiting evaluation from co-manager before routing to HOD.`
         : resolvedReturn
         ? `${roleLabel} resubmitted after ${resolvedReturn.returnedByRole} return (round ${resolvedReturn.round}) — ${describeChanges(returnEdits.changes || [])}.${
             activatedHodLeg
@@ -1246,12 +1346,31 @@ reviewRouter.put(
         : skippedHodForHrReturn
         ? `${roleLabel} resubmitted evaluation scores (${managerScore}) after HR return — sent directly back to HR without another HOD pass.`
         : isSubmitting
-        ? `${roleLabel} submitted evaluation scores with final weighted score: ${finalScore}`
+        ? isDualManager
+          ? `Both managers submitted evaluations. Combined manager weighted score: ${managerScore}. Transitioned to ${newStatus}.`
+          : `${roleLabel} submitted evaluation scores with final weighted score: ${finalScore}`
         : 'Saved score and comment drafts',
       returnRequestId: resolvedReturn?.id,
       kraChanges: returnEdits.changes,
       performedAt: new Date().toISOString(),
     };
+
+    // Combine strengths / improvements / comments when both have submitted in dual mode
+    let combinedStrengths = strengths !== undefined ? strengths : existing.strengths;
+    let combinedImprovements = improvements !== undefined ? improvements : existing.improvements;
+    let combinedComments = managerOverallComments !== undefined ? managerOverallComments : existing.managerOverallComments;
+
+    if (isDualManager && allManagersSubmitted) {
+      const allCommentsList = assignedManagerIds
+        .map((mId) => {
+          const sub = managerSubmissions[mId];
+          return sub?.managerOverallComments ? `[${sub.managerName || 'Manager'}]: ${sub.managerOverallComments}` : null;
+        })
+        .filter(Boolean);
+      if (allCommentsList.length > 0) {
+        combinedComments = allCommentsList.join('\n\n');
+      }
+    }
 
     const updatedReview: EmployeeReview = {
       ...existing,
@@ -1260,17 +1379,17 @@ reviewRouter.put(
       hodScore: effectiveHodScore,
       finalScore,
       managerScore,
-      strengths: strengths !== undefined ? strengths : existing.strengths,
-      improvements: improvements !== undefined ? improvements : existing.improvements,
-      managerOverallComments:
-        managerOverallComments !== undefined ? managerOverallComments : existing.managerOverallComments,
+      managerSubmissions,
+      strengths: combinedStrengths,
+      improvements: combinedImprovements,
+      managerOverallComments: combinedComments,
       employeeComments: employeeComments !== undefined ? employeeComments : existing.employeeComments,
       hrComments: hrComments !== undefined ? hrComments : existing.hrComments,
       status: newStatus,
       isClosed: isSubmitting && existing.reviewType === 'PIP_WEEKLY' ? true : existing.isClosed,
       completedAt: isSubmitting && existing.reviewType === 'PIP_WEEKLY' ? new Date().toISOString() : existing.completedAt,
       actionHistory: [...(existing.actionHistory || []), action],
-      submittedAt: isSubmitting ? new Date().toISOString() : existing.submittedAt,
+      submittedAt: isSubmitting && allManagersSubmitted ? new Date().toISOString() : existing.submittedAt,
       updatedAt: new Date().toISOString(),
     };
 
@@ -1428,6 +1547,29 @@ reviewRouter.put(
                 isRead: false,
                 priority: 'MEDIUM',
                 metadata: { reviewId: id, periodId: existing.reviewPeriodId, status: newStatus },
+                createdAt: now,
+              },
+            },
+            { upsert: true }
+          );
+        }
+      } else if (isPartialSubmit) {
+        // Notify co-manager(s) that evaluation has been submitted by peer manager
+        const otherManagerIds = assignedManagerIds.filter((mId) => mId !== activeManagerId);
+        for (const otherId of otherManagerIds) {
+          await notifsCol.updateOne(
+            { id: `notif_${id}_dual_pending_${otherId}` },
+            {
+              $set: {
+                id: `notif_${id}_dual_pending_${otherId}`,
+                userId: otherId,
+                userRole: 'MANAGER',
+                type: 'REVIEW_ASSIGNED',
+                title: `Co-Manager Submitted: ${existing.employeeName}`,
+                message: `${userName} has submitted their evaluation for ${existing.employeeName} (${managerScore}/5). Your evaluation is pending to finalize the manager review stage.`,
+                isRead: false,
+                priority: 'HIGH',
+                metadata: { reviewId: id, periodId: existing.reviewPeriodId, activeSection: 'reviews' },
                 createdAt: now,
               },
             },

@@ -46,6 +46,9 @@ export interface Employee {
   joiningDate: string;
   managerId?: string;
   managerName?: string;
+  managerIds?: string[];
+  managerNames?: string[];
+  reportsDirectlyToHod?: boolean;
   hodId?: string;
   hodName?: string;
   cycleId: string;

@@ -247,7 +247,7 @@ export const AssignKraModal: React.FC<AssignKraModalProps> = ({
           </button>
         </div>
 
-        <div className="p-5 space-y-3 overflow-y-auto">
+        <div className="p-5 space-y-3 overflow-y-auto flex-1 min-h-0">
           <div className="relative">
             <Search className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
