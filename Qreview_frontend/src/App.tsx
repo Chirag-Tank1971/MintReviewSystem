@@ -102,9 +102,10 @@ function AppContent() {
 
   const homeView = getHomeView(user?.role);
 
-  // With no hash in the URL, land on the role's home view.
+  // With no path (or '/') in the URL, land on the role's home view.
   useEffect(() => {
-    if (user?.role && (!window.location.hash || window.location.hash === '#')) {
+    const isRoot = !window.location.pathname || window.location.pathname === '/' || window.location.hash === '#';
+    if (user?.role && isRoot) {
       setView(homeView, true);
     }
   }, [user?.role, homeView, setView]);

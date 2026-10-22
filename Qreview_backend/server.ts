@@ -225,6 +225,7 @@ async function startServer() {
 
   // Serve compiled frontend assets if available
   const possibleDistPaths = [
+    path.resolve(process.cwd(), '../Qreview_frontend/dist'),
     path.resolve(process.cwd(), '../frontend/dist'),
     path.resolve(process.cwd(), 'dist/public'),
     path.resolve(process.cwd(), 'dist'),
