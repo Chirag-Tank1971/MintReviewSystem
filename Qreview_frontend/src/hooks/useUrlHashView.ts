@@ -45,10 +45,13 @@ export function isViewPermitted(view: AppView, role?: string): boolean {
 }
 
 function getInitialView(): AppView {
+  const path = window.location.pathname.replace(/^\/+|\/+$/g, '').split('/')[0];
   const hash = window.location.hash.replace(/^#\/?/, '').trim();
-  if (hash === 'portal') return 'dashboard';
-  if (VALID_VIEWS.includes(hash as AppView)) {
-    return hash as AppView;
+  const raw = path || hash;
+
+  if (raw === 'portal') return 'dashboard';
+  if (VALID_VIEWS.includes(raw as AppView)) {
+    return raw as AppView;
   }
   return 'dashboard';
 }
@@ -60,42 +63,45 @@ export function useUrlHashView() {
   // signal a top loading bar can key off without any timers or polling of its own.
   const [isPending, startTransition] = useTransition();
 
-  // Sync hash when view changes
+  // Sync pathname when view changes
   const setView = useCallback((view: AppView, replaceHistory = false) => {
     startTransition(() => {
       setCurrentViewState(view);
     });
-    const newHash = `#${view}`;
-    if (window.location.hash !== newHash) {
+    const newPath = `/${view}`;
+    if (window.location.pathname !== newPath || window.location.hash) {
       if (replaceHistory) {
-        window.history.replaceState(null, '', newHash);
+        window.history.replaceState(null, '', newPath);
       } else {
-        window.history.pushState(null, '', newHash);
+        window.history.pushState(null, '', newPath);
       }
     }
   }, []);
 
-  // Listen to browser Back/Forward (popstate/hashchange)
+  // Listen to browser Back/Forward (popstate) & legacy hashchange
   useEffect(() => {
-    const handleHashChange = () => {
+    const handleUrlChange = () => {
+      const path = window.location.pathname.replace(/^\/+|\/+$/g, '').split('/')[0];
       const hash = window.location.hash.replace(/^#\/?/, '').trim();
+      const raw = path || hash;
+
       startTransition(() => {
-        if (hash === 'portal') {
+        if (raw === 'portal') {
           setCurrentViewState('dashboard');
-        } else if (VALID_VIEWS.includes(hash as AppView)) {
-          setCurrentViewState(hash as AppView);
+        } else if (VALID_VIEWS.includes(raw as AppView)) {
+          setCurrentViewState(raw as AppView);
         } else {
           setCurrentViewState('dashboard');
         }
       });
     };
 
-    window.addEventListener('hashchange', handleHashChange);
-    window.addEventListener('popstate', handleHashChange);
+    window.addEventListener('popstate', handleUrlChange);
+    window.addEventListener('hashchange', handleUrlChange);
 
     return () => {
-      window.removeEventListener('hashchange', handleHashChange);
-      window.removeEventListener('popstate', handleHashChange);
+      window.removeEventListener('popstate', handleUrlChange);
+      window.removeEventListener('hashchange', handleUrlChange);
     };
   }, []);
 

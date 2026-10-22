@@ -340,7 +340,8 @@ export const EmployeeDirectory: React.FC<EmployeeDirectoryProps> = ({
                 if (onNavigateToHierarchy) {
                   onNavigateToHierarchy();
                 } else {
-                  window.location.hash = '#hierarchy';
+                  window.history.pushState(null, '', '/hierarchy');
+                  window.dispatchEvent(new PopStateEvent('popstate'));
                 }
               }}
               className="sm:ml-auto text-sm font-medium text-indigo-700 dark:text-indigo-400 hover:underline cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"

@@ -316,7 +316,8 @@ export const DepartmentHierarchyView: React.FC<DepartmentHierarchyViewProps> = (
     if (onBackToDirectory) {
       onBackToDirectory();
     } else {
-      window.location.hash = '#employees';
+      window.history.pushState(null, '', '/employees');
+      window.dispatchEvent(new PopStateEvent('popstate'));
     }
   };
 
@@ -345,7 +346,8 @@ export const DepartmentHierarchyView: React.FC<DepartmentHierarchyViewProps> = (
             label: 'Go to import and export',
             icon: Upload,
             onClick: () => {
-              window.location.hash = '#bulk';
+              window.history.pushState(null, '', '/bulk');
+              window.dispatchEvent(new PopStateEvent('popstate'));
             },
           }}
           secondaryAction={{ label: 'Back to employees', icon: Users, onClick: backToDirectory }}
