@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './Tooltip';
 import { cn } from '../../utils/cn';
 import { NAV_ITEMS, getNavLabel, isNavItemVisible, NavItemConfig } from '../../config/navigation';
+import { useHasSalesChamps } from '../../hooks/useHasSalesChamps';
 
 interface SidebarProps {
   currentView: AppView;
@@ -46,11 +47,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const role = user?.role;
+  const showSalesChamps = useHasSalesChamps(role, user?.employeeId);
 
   const navGroups: NavGroup[] = GROUP_ORDER.map((title) => ({
     title,
     items: NAV_ITEMS.filter(
-      (item) => item.group === title && item.inSidebar !== false && isNavItemVisible(item, role)
+      (item) =>
+        item.group === title &&
+        item.inSidebar !== false &&
+        isNavItemVisible(item, role) &&
+        (item.id !== 'sales_champs' || showSalesChamps)
     ),
   })).filter((group) => group.items.length > 0);
 

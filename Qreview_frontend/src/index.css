@@ -20,19 +20,19 @@
   --color-slate-750: #243044;
   --color-slate-850: #172033;
 
-  /* Brand accent: MintReview green. Components use the `indigo-*` utilities for the accent,
-     so the accent is defined here once instead of in every component. */
-  --color-indigo-50: #eef8f3;
-  --color-indigo-100: #d6efe2;
-  --color-indigo-200: #b0dec8;
-  --color-indigo-300: #7fc6a7;
-  --color-indigo-400: #4aa984;
-  --color-indigo-500: #23916b;
-  --color-indigo-600: #12805c;
-  --color-indigo-700: #0b6a4c;
-  --color-indigo-800: #0b553e;
-  --color-indigo-900: #0a4634;
-  --color-indigo-950: #04271d;
+  /* Brand accent: the logo's deep indigo (600 = #3a3a8c). Components use the `indigo-*` utilities
+     for the accent, so it is defined here once. Kept apart from emerald so "act" never looks like "done". */
+  --color-indigo-50: #eef0fa;
+  --color-indigo-100: #dfe2f5;
+  --color-indigo-200: #c3c8ec;
+  --color-indigo-300: #a0a6df;
+  --color-indigo-400: #7f85d2;
+  --color-indigo-500: #5d62bd;
+  --color-indigo-600: #3a3a8c;
+  --color-indigo-700: #313178;
+  --color-indigo-800: #292964;
+  --color-indigo-900: #222253;
+  --color-indigo-950: #15153a;
 
   /* No violet / purple / fuchsia in the palette: those utilities render as neutral slate. */
   --color-violet-50: var(--color-slate-50);

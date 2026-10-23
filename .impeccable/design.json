@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-22T00:00:00Z",
+  "title": "Design System: MintReview",
+  "extensions": {
+    "colorMeta": {
+      "ledger-indigo": { "role": "primary", "displayName": "Ledger Indigo", "canonical": "#3a3a8c", "tonalRamp": ["#15153a", "#222253", "#292964", "#313178", "#3a3a8c", "#7f85d2", "#c3c8ec", "#eef0fa"] },
+      "paper": { "role": "neutral", "displayName": "Paper", "canonical": "#f8fafc", "tonalRamp": ["#020617", "#0f172a", "#1e293b", "#334155", "#64748b", "#cbd5e1", "#e2e8f0", "#f8fafc"] },
+      "status-met": { "role": "status", "displayName": "Met (emerald)", "canonical": "#059669" },
+      "status-attention": { "role": "status", "displayName": "Attention (amber)", "canonical": "#f59e0b" },
+      "status-overdue": { "role": "status", "displayName": "Overdue (rose)", "canonical": "#e11d48" },
+      "status-hr": { "role": "status", "displayName": "HR Action (sky)", "canonical": "#0284c7" }
+    },
+    "typographyMeta": {
+      "headline": { "displayName": "Headline", "purpose": "Page title in PageHeader, one per page." },
+      "title": { "displayName": "Title", "purpose": "Card and section titles." },
+      "body": { "displayName": "Body", "purpose": "Descriptions and reading text." },
+      "label": { "displayName": "Label", "purpose": "Form labels and sidebar navigation." },
+      "caption": { "displayName": "Caption", "purpose": "Buttons, badges, table meta." },
+      "figure": { "displayName": "Figure", "purpose": "Every score, percentage and amount, in tabular numerals." }
+    },
+    "shadows": [
+      { "name": "segment-lift", "value": "0 1px 2px 0 rgb(0 0 0 / 0.05)", "purpose": "Active option in a segmented control." },
+      { "name": "modal", "value": "0 25px 50px -12px rgb(0 0 0 / 0.25)", "purpose": "Modal and dialog cards floating over the scrim." }
+    ],
+    "motion": [
+      { "name": "page-enter", "value": "150ms ease-out", "purpose": "Fade and 4px rise when a view mounts." },
+      { "name": "overlay-enter", "value": "220ms cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Modals, drawers and toasts entering." },
+      { "name": "overlay-exit", "value": "180ms cubic-bezier(0.4, 0, 1, 1)", "purpose": "Modals and drawers leaving." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one main action on a page or panel.",
+      "html": "<button class=\"ds-btn ds-btn-primary\">Submit review</button>",
+      "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 12px; font: 500 12px/1 'IBM Plex Sans', system-ui, sans-serif; border-radius: 6px; border: 1px solid transparent; cursor: pointer; transition: background-color 150ms, color 150ms; } .ds-btn:focus-visible { outline: none; box-shadow: 0 0 0 1px #fff, 0 0 0 3px #5d62bd; } .ds-btn-primary { background: #3a3a8c; color: #fff; } .ds-btn-primary:hover { background: #313178; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Default for every other action.",
+      "html": "<button class=\"ds-btn2\">Export</button>",
+      "css": ".ds-btn2 { display: inline-flex; align-items: center; height: 32px; padding: 0 12px; font: 500 12px/1 'IBM Plex Sans', system-ui, sans-serif; border-radius: 6px; border: 1px solid #cbd5e1; background: #fff; color: #1e293b; cursor: pointer; transition: background-color 150ms; } .ds-btn2:hover { background: #f8fafc; } .ds-btn2:focus-visible { outline: none; box-shadow: 0 0 0 1px #fff, 0 0 0 3px #5d62bd; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Quiet controls such as refresh, next to other actions.",
+      "html": "<button class=\"ds-btn-ghost\">Refresh</button>",
+      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; height: 32px; padding: 0 12px; font: 500 12px/1 'IBM Plex Sans', system-ui, sans-serif; border-radius: 6px; border: 1px solid transparent; background: transparent; color: #475569; cursor: pointer; transition: background-color 150ms; } .ds-btn-ghost:hover { background: #f1f5f9; } .ds-btn-ghost:focus-visible { outline: none; box-shadow: 0 0 0 2px #5d62bd; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Standard form field with label above.",
+      "html": "<label class=\"ds-label\">Manager remarks<input class=\"ds-input\" placeholder=\"Add a short remark\"></label>",
+      "css": ".ds-label { display: block; font: 500 13px/1.4 'IBM Plex Sans', system-ui, sans-serif; color: #1e293b; } .ds-input { display: block; width: 100%; margin-top: 6px; padding: 8px 12px; font: 400 14px/1.4 'IBM Plex Sans', system-ui, sans-serif; color: #0f172a; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; transition: border-color 150ms, box-shadow 150ms; } .ds-input::placeholder { color: #94a3b8; } .ds-input:focus { outline: none; border-color: #3a3a8c; box-shadow: 0 0 0 2px rgb(93 98 189 / 0.25); }"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "The one status badge: tinted background, tinted border, dot.",
+      "html": "<span class=\"ds-badge ds-badge-warning\"><span class=\"ds-dot\"></span>On PIP</span> <span class=\"ds-badge ds-badge-success\"><span class=\"ds-dot\"></span>Closed</span>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; font: 500 12px/1.33 'IBM Plex Sans', system-ui, sans-serif; border-radius: 6px; border: 1px solid; font-variant-numeric: tabular-nums; white-space: nowrap; } .ds-dot { width: 6px; height: 6px; border-radius: 9999px; background: currentColor; } .ds-badge-warning { background: #fffbeb; border-color: #fde68a; color: #92400e; } .ds-badge-warning .ds-dot { background: #f59e0b; } .ds-badge-success { background: #ecfdf5; border-color: #a7f3d0; color: #065f46; } .ds-badge-success .ds-dot { background: #10b981; }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Flat dashboard card with hairline border and optional text action.",
+      "html": "<section class=\"ds-card\"><div class=\"ds-card-head\"><div><h2 class=\"ds-card-title\">Review coverage</h2><p class=\"ds-card-sub\">Q3 · 142 employees</p></div><button class=\"ds-card-action\">View all</button></div><p class=\"ds-card-figure\">87%</p></section>",
+      "css": ".ds-card { background: #fff; border: 1px solid rgb(226 232 240 / 0.8); border-radius: 12px; padding: 20px; font-family: 'IBM Plex Sans', system-ui, sans-serif; max-width: 320px; } .ds-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 16px; } .ds-card-title { margin: 0; font: 600 14px/1.43 inherit; color: #0f172a; } .ds-card-sub { margin: 2px 0 0; font-size: 12px; color: #64748b; } .ds-card-action { background: none; border: 0; padding: 0; font: 500 12px inherit; color: #3a3a8c; cursor: pointer; } .ds-card-action:hover { text-decoration: underline; } .ds-card-figure { margin: 0; font: 600 24px/1 inherit; color: #0f172a; font-variant-numeric: tabular-nums; }"
+    },
+    {
+      "name": "Sidebar Nav Item",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "Sidebar entries; the active item takes the mint wash.",
+      "html": "<nav class=\"ds-nav\"><div class=\"ds-nav-group\">Work</div><a class=\"ds-nav-item ds-nav-active\" href=\"#\">Dashboard</a><a class=\"ds-nav-item\" href=\"#\">Reviews</a><a class=\"ds-nav-item\" href=\"#\">Appraisals</a></nav>",
+      "css": ".ds-nav { width: 224px; padding: 12px 8px; background: #fff; border-right: 1px solid #e2e8f0; font-family: 'IBM Plex Sans', system-ui, sans-serif; } .ds-nav-group { padding: 0 10px 4px; font: 500 12px inherit; color: #64748b; } .ds-nav-item { display: block; padding: 6px 10px; border-radius: 6px; font-size: 13px; color: #475569; text-decoration: none; transition: background-color 150ms, color 150ms; } .ds-nav-item:hover { background: #f1f5f9; color: #0f172a; } .ds-nav-item:focus-visible { outline: none; box-shadow: 0 0 0 2px #5d62bd; } .ds-nav-active, .ds-nav-active:hover { background: #eef0fa; color: #292964; font-weight: 500; }"
+    },
+    {
+      "name": "Segmented Control",
+      "kind": "custom",
+      "refersTo": "segmented-control",
+      "description": "A few mutually exclusive views in one joined row.",
+      "html": "<div class=\"ds-seg\" role=\"group\"><button class=\"ds-seg-opt ds-seg-on\" aria-pressed=\"true\">Team</button><button class=\"ds-seg-opt\" aria-pressed=\"false\">Department</button></div>",
+      "css": ".ds-seg { display: inline-flex; padding: 2px; border-radius: 6px; background: #f1f5f9; } .ds-seg-opt { height: 28px; padding: 0 12px; border: 0; border-radius: 4px; background: transparent; font: 500 12px 'IBM Plex Sans', system-ui, sans-serif; color: #475569; cursor: pointer; transition: background-color 150ms, color 150ms; } .ds-seg-opt:hover { color: #0f172a; } .ds-seg-opt:focus-visible { outline: none; box-shadow: 0 0 0 2px #5d62bd; } .ds-seg-on { background: #fff; color: #0f172a; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Calm Ledger",
+    "overview": "MintReview is a book of record for people's work. Every screen should read like a well-kept ledger: quiet slate paper, exact figures in aligned columns, and colour only where it carries meaning. Scores, increments and PIPs are sensitive, so the interface never raises its voice. It states facts plainly, shows who did what, and lets the person act on the next step.\n\nDensity is moderate to high and built for office desktops: compact 32px controls, 13–14px text, 20px card padding. Hierarchy comes from weight and spacing, not size jumps or colour. A single indigo accent, taken from the logo, marks the one main action and where you are; everything else is slate. Status colours (emerald, amber, rose, sky) appear only as small, tinted badges and dots, never as large fields.\n\nLight and dark themes are equal citizens; every surface, border and badge has a dark counterpart.",
+    "keyCharacteristics": [
+      "Slate neutrals with one Ledger Indigo accent.",
+      "IBM Plex Sans throughout; numbers always in tabular figures.",
+      "Flat cards on a pale paper background, separated by hairline borders rather than shadows.",
+      "Status shown as tinted badges with a dot, never as solid colour blocks.",
+      "Motion is short (150–220ms), opacity and small translate only, and fully disabled under reduced motion."
+    ],
+    "rules": [
+      { "name": "The One Voice Rule", "body": "Ledger Indigo is the only accent. It marks the main action and the current location; it never decorates.", "section": "colors" },
+      { "name": "The No-Purple Rule", "body": "Violet, purple and fuchsia do not exist in this interface; those Tailwind utilities are remapped to slate. The logo's multicolour \"M\" stays in the logo; only its indigo (the accent) and steel blue (charts) are used in the interface.", "section": "colors" },
+      { "name": "The Tint, Not Fill Rule", "body": "Status colour appears as a tinted badge or a small dot, never as a solid block behind content.", "section": "colors" },
+      { "name": "The Column Rule", "body": "Every number is set in tabular figures (`tabular-nums`, `font-mono` or `data-numeric=\"true\"`) so it lines up in tables and cards.", "section": "typography" },
+      { "name": "The Weight-Not-Size Rule", "body": "Hierarchy steps by weight and colour; no heading or text is set larger than 20px. Only key figures (stat values, headline scores) go larger, 24px and up, always tabular.", "section": "typography" },
+      { "name": "The Flat-At-Rest Rule", "body": "Content in the page never carries a shadow. Shadows mean \"this floats above the page\" and are reserved for modals, popovers and toasts.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do use the `indigo-*` utilities for the accent; they render Ledger Indigo.",
+      "Do use `Button`, `StatusBadge`, `PageHeader`, `SegmentedControl` and the `formStyles` classes instead of restyling by hand.",
+      "Do set every score, percentage and amount in tabular figures.",
+      "Do give every surface, border and badge a `dark:` counterpart.",
+      "Do keep PIP and rating states in calm amber tints, with a clear next action."
+    ],
+    "donts": [
+      "Don't use violet, purple or fuchsia, or use the logo's orange, yellow or green as accents (they read as status colours). Chart series colours come from src/config/chartColors.ts.",
+      "Don't put shadows on cards or other in-page content.",
+      "Don't fill large areas with status colour; use tinted badges and dots.",
+      "Don't add a second filled primary button to the same panel.",
+      "Don't add a second typeface or a monospace font."
+    ]
+  }
+}

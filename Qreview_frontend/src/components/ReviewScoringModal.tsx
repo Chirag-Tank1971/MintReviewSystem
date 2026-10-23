@@ -303,6 +303,8 @@ export const ReviewScoringModal: React.FC<ReviewScoringModalProps> = ({
       ? review.managerIds
       : (review.managerId ? [review.managerId] : []);
   const isDualManager = assignedManagerIds.length > 1;
+  // Direct-to-HOD: the HOD scores once (in the manager slot) and it goes straight to HR — no step 3.
+  const isDirectToHod = Boolean(review.reportsDirectlyToHod);
   const canEdit = !review.isClosed && (isHrOrAdmin || isManager);
   const isHod = canActInElevatedCapacity && review.hodId === currentUser?.employeeId;
   const canHodAct = isHod && review.status === 'HOD_PENDING' && !review.isClosed;
@@ -773,21 +775,24 @@ export const ReviewScoringModal: React.FC<ReviewScoringModalProps> = ({
     <div
       className={`fixed inset-0 z-[9990] flex items-center justify-center bg-slate-900/50 dark:bg-slate-950/80 backdrop-blur-xs p-4 overflow-y-auto ${backdropClass}`}
     >
-      <div className={`bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-5xl my-6 flex flex-col max-h-[92vh] overflow-clip text-slate-900 dark:text-white ${cardClass}`}>
-        
-        {/* MODAL HEADER */}
-        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/80 dark:bg-slate-850">
-          <div className="flex items-center space-x-4">
+      {/* Side-rail layout: who / status / steps / score / actions on the left; KRAs get the full height on the right */}
+      <div className={`bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-7xl flex flex-col md:flex-row h-[calc(100dvh-2rem)] overflow-clip text-slate-900 dark:text-white ${cardClass}`}>
+        <aside className="md:w-80 shrink-0 flex flex-col max-h-[45%] md:max-h-none border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-850">
+        <div className="flex-1 min-h-0 overflow-y-auto">
+
+        {/* RAIL HEADER */}
+        <div className="px-4 pt-4 pb-3 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex items-start gap-3">
             <div
-              className="w-11 h-11 rounded-xl flex items-center justify-center font-bold text-white"
+              className="w-9 h-9 rounded-lg flex items-center justify-center font-bold text-xs text-white shrink-0"
               style={{ backgroundColor: review.cycleColor || '#1e3a8a' }}
             >
               {review.cycleCode}
             </div>
-            <div>
-              <div className="flex items-center space-x-2 flex-wrap">
-                <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">{review.employeeName}</h2>
-                <span className="text-xs px-2 py-0.5 rounded-full tabular-nums font-medium bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+            <div className="flex-1 min-w-0">
+              <h2 className="text-base font-semibold text-slate-900 dark:text-white leading-tight">{review.employeeName}</h2>
+              <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs px-1.5 py-0.5 rounded-md tabular-nums font-medium bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
                   {review.employeeCode}
                 </span>
                 <EmployeeStatusBadge status={review.employeeStatus} />
@@ -814,46 +819,62 @@ export const ReviewScoringModal: React.FC<ReviewScoringModalProps> = ({
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                {review.designationName} • {review.departmentName} • Period: <span className="font-semibold text-slate-700 dark:text-slate-200">{review.reviewPeriodName}</span> • {isDualManager ? 'Managers: ' : 'Manager: '}<span className="font-semibold text-slate-700 dark:text-slate-200">
-                  {isDualManager && review.managerNames && review.managerNames.length > 0
-                    ? review.managerNames.join(' & ')
-                    : review.managerName}
-                </span>
-              </p>
+            </div>
+            <div className="flex items-center -mr-1.5 -mt-1 shrink-0">
+              <button
+                onClick={handlePrint}
+                title="Print review sheet"
+                aria-label="Print review sheet"
+                className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-md transition-colors cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleAttemptClose}
+                aria-label="Close"
+                className="p-1.5 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-md transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
           </div>
 
-          <div className="flex items-center space-x-2">
-            {review.isClosed && (
-              <button
-                onClick={() => setShowLetterModal(true)}
-                title="View Quarterly Review Letter"
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors cursor-pointer"
-              >
-                <Award className="w-3.5 h-3.5" />
-                <span>View letter</span>
-              </button>
+          <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+            <dt className="text-slate-500 dark:text-slate-400">Role</dt>
+            <dd className="text-slate-700 dark:text-slate-200 min-w-0">{review.designationName} · {review.departmentName}</dd>
+            <dt className="text-slate-500 dark:text-slate-400">Period</dt>
+            <dd className="font-medium text-slate-800 dark:text-slate-100">{review.reviewPeriodName}</dd>
+            <dt className="text-slate-500 dark:text-slate-400">{isDualManager ? 'Managers' : 'Manager'}</dt>
+            <dd className="font-medium text-slate-800 dark:text-slate-100 min-w-0">
+              {isDualManager && review.managerNames && review.managerNames.length > 0
+                ? review.managerNames.join(' & ')
+                : review.managerName || <span className="text-rose-600 dark:text-rose-400">Not assigned</span>}
+            </dd>
+            {review.hodName && (
+              <>
+                <dt className="text-slate-500 dark:text-slate-400">HOD</dt>
+                <dd className="text-slate-700 dark:text-slate-200 min-w-0">{review.hodName}</dd>
+              </>
             )}
+          </dl>
+
+          {review.isClosed && (
             <button
-              onClick={handlePrint}
-              title="Print Review Sheet"
-              className="p-2 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+              onClick={() => setShowLetterModal(true)}
+              className="mt-3 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors cursor-pointer"
             >
-              <Printer className="w-4 h-4" />
+              <Award className="w-3.5 h-3.5" />
+              <span>View review letter</span>
             </button>
-            <button
-              onClick={handleAttemptClose}
-              className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+          )}
         </div>
+
+        {/* Status banners (inactive, returned, errors) */}
+        <div className="px-4 pt-3 space-y-2 empty:hidden">
 
         {/* INACTIVE EMPLOYEE SAFEGUARD BANNER */}
         {review.employeeStatus === 'INACTIVE' && (
-          <div className="mx-6 mt-3 px-4 py-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200 text-xs rounded-xl flex items-start gap-2.5">
+          <div className="px-4 py-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200 text-xs rounded-xl flex items-start gap-2.5">
             <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
             <div>
               <p className="font-bold">Employment record inactive (offboarded / exited)</p>
@@ -881,20 +902,20 @@ export const ReviewScoringModal: React.FC<ReviewScoringModalProps> = ({
                 ? 'it will go straight back to HR.'
                 : 'it will go straight back to HR without another HOD pass.';
             return (
-              <div className="mx-6 mt-2 bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 text-amber-950 dark:text-amber-100 text-xs rounded-xl">
+              <div className="bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 text-amber-950 dark:text-amber-100 text-xs rounded-xl">
                 {/* Compact one-line summary — keeps the KRA scoring area roomy */}
                 <button
                   type="button"
                   onClick={() => setReturnBannerExpanded((v) => !v)}
-                  className="w-full px-3 py-2 flex items-center gap-2 text-left cursor-pointer"
+                  className="w-full px-3 py-2 flex flex-wrap items-start gap-x-2 gap-y-1.5 text-left cursor-pointer"
                 >
-                  <RotateCcw className="w-3.5 h-3.5 text-amber-700 dark:text-amber-300 shrink-0" />
-                  <span className="font-bold truncate">
+                  <RotateCcw className="w-3.5 h-3.5 mt-0.5 text-amber-700 dark:text-amber-300 shrink-0" />
+                  <span className="font-semibold flex-1 min-w-0">
                     Returned by {openReturn.returnedByRole} ({openReturn.returnedByName}) ·{' '}
                     {openReturn.isFullReturn ? 'full review' : `${openReturn.kraIds.length} of ${snapshots.length} KRAs`} to re-evaluate
                     {queuedHodLeg && <span className="font-normal"> · then HOD ({queuedHodLeg.kraIds.length})</span>}
                   </span>
-                  <span className="ml-auto flex items-center gap-1.5 shrink-0">
+                  <span className="basis-full pl-5.5 flex flex-wrap items-center gap-1.5">
                     <span className="text-[11px] px-2 py-0.5 rounded-md font-semibold bg-white/70 dark:bg-slate-900/60 border border-amber-200 dark:border-amber-800">
                       {doneCount}/{openReturn.kraIds.length} done
                     </span>
@@ -962,7 +983,7 @@ export const ReviewScoringModal: React.FC<ReviewScoringModalProps> = ({
             );
           })()
         ) : returnBadge ? (
-          <div className="mx-6 mt-3 px-4 py-3 bg-rose-50/90 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800/80 text-rose-900 dark:text-rose-200 text-xs rounded-xl flex items-start gap-3">
+          <div className="px-4 py-3 bg-rose-50/90 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800/80 text-rose-900 dark:text-rose-200 text-xs rounded-xl flex items-start gap-3">
             <RotateCcw className="w-4 h-4 shrink-0 text-slate-400 dark:text-slate-500" aria-hidden="true" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -980,26 +1001,27 @@ export const ReviewScoringModal: React.FC<ReviewScoringModalProps> = ({
 
         {/* ALERTS & ERROR MESSAGES */}
         {errorMessage && (
-          <div className="mx-6 mt-3 p-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200 text-xs rounded-xl flex items-center space-x-2">
+          <div className="p-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200 text-xs rounded-xl flex items-center space-x-2">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{errorMessage}</span>
           </div>
         )}
         {successMessage && (
-          <div className="mx-6 mt-3 p-3 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs rounded-xl flex items-center space-x-2">
+          <div className="p-3 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs rounded-xl flex items-center space-x-2">
             <Check className="w-4 h-4 shrink-0" />
             <span>{successMessage}</span>
           </div>
         )}
+        </div>
 
         {/* STEPPER WIZARD TABS */}
-        <div className="px-6 py-2.5 bg-slate-100/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center space-x-2 sm:space-x-4">
+        <nav aria-label="Review steps" className="px-4 py-3 flex flex-col gap-2">
+          <div className="flex flex-col gap-1">
             {/* Step 1 */}
             <button
               type="button"
               onClick={() => setWizardStep(1)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              className={`w-full flex flex-wrap items-center gap-2 px-2.5 py-2 rounded-md text-xs font-semibold text-left transition-all cursor-pointer ${
                 wizardStep === 1
                   ? 'bg-white dark:bg-slate-750 text-indigo-950 dark:text-white font-bold border border-slate-200 dark:border-slate-700 ring-1 ring-black/5'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -1022,13 +1044,12 @@ export const ReviewScoringModal: React.FC<ReviewScoringModalProps> = ({
               )}
             </button>
 
-            <span className="text-slate-300 dark:text-slate-600">➔</span>
 
             {/* Step 2 */}
             <button
               type="button"
               onClick={() => setWizardStep(2)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              className={`w-full flex flex-wrap items-center gap-2 px-2.5 py-2 rounded-md text-xs font-semibold text-left transition-all cursor-pointer ${
                 wizardStep === 2
                   ? 'bg-white dark:bg-slate-750 text-indigo-950 dark:text-white font-bold border border-slate-200 dark:border-slate-700 ring-1 ring-black/5 shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -1039,7 +1060,7 @@ export const ReviewScoringModal: React.FC<ReviewScoringModalProps> = ({
               }`}>
                 2
               </span>
-              <span>Manager scoring</span>
+              <span>{isDirectToHod ? 'HOD scoring' : 'Manager scoring'}</span>
               {isDualManager && (
                 <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
                   Dual
@@ -1061,13 +1082,12 @@ export const ReviewScoringModal: React.FC<ReviewScoringModalProps> = ({
               </span>
             ) : (
               <>
-                <span className="text-slate-300 dark:text-slate-600">➔</span>
-
                 {/* Step 3: HOD Scoring */}
+                {!isDirectToHod && (
                 <button
                   type="button"
                   onClick={() => setWizardStep(3)}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                  className={`w-full flex flex-wrap items-center gap-2 px-2.5 py-2 rounded-md text-xs font-semibold text-left transition-all cursor-pointer ${
                     wizardStep === 3
                       ? 'bg-white dark:bg-slate-750 text-indigo-950 dark:text-white font-bold border border-slate-200 dark:border-slate-700 ring-1 ring-black/5'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -1088,14 +1108,13 @@ export const ReviewScoringModal: React.FC<ReviewScoringModalProps> = ({
                     </span>
                   )}
                 </button>
-
-                <span className="text-slate-300 dark:text-slate-600">➔</span>
+                )}
 
                 {/* Step 4 */}
                 <button
                   type="button"
                   onClick={() => setWizardStep(4)}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                  className={`w-full flex flex-wrap items-center gap-2 px-2.5 py-2 rounded-md text-xs font-semibold text-left transition-all cursor-pointer ${
                     wizardStep === 4
                       ? 'bg-white dark:bg-slate-750 text-indigo-950 dark:text-white font-bold border border-slate-200 dark:border-slate-700 ring-1 ring-black/5'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -1104,7 +1123,7 @@ export const ReviewScoringModal: React.FC<ReviewScoringModalProps> = ({
                   <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold ${
                     wizardStep === 4 ? 'bg-indigo-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
                   }`}>
-                    4
+                    {isDirectToHod ? 3 : 4}
                   </span>
                   <span>Final review</span>
                 </button>
@@ -1112,126 +1131,274 @@ export const ReviewScoringModal: React.FC<ReviewScoringModalProps> = ({
             )}
           </div>
 
-          {/* Audit trail trigger */}
+        </nav>
+
+        {/* LIVE SCORE (manager and HOD steps) */}
+        {(wizardStep === 2 || wizardStep === 3) && (
+          <div className="px-4 pb-3">
+            {wizardStep === 2 ? (
+              <ScoreSummaryBar
+                computedScore={computedScore}
+                scoreTier={scoreTier}
+                unratedCount={unratedCount}
+                isDualManager={isDualManager}
+              />
+            ) : (
+              <ScoreSummaryBar
+                computedScore={computedHodScore}
+                scoreTier={hodScoreTier}
+                unratedCount={unratedHodCount}
+              />
+            )}
+          </div>
+        )}
+
+        {/* DUAL MANAGER REVIEWERS */}
+        {isDualManager && (
+          <div className="px-4 pb-3">
+            <div className="flex items-center gap-1.5 mb-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
+              <Users className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Reviewers</span>
+            </div>
+            <ul className="space-y-1.5">
+              {assignedManagerIds.map((mId, i) => {
+                const mName = review.managerNames?.[i] || (i === 0 ? review.managerName : `Manager ${i + 1}`);
+                const sub = review.managerSubmissions?.[mId];
+                const isMe = currentUser?.employeeId === mId || currentUser?.id === mId;
+
+                return (
+                  <li
+                    key={mId}
+                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs"
+                  >
+                    <div
+                      className={`w-6 h-6 rounded-full flex items-center justify-center font-semibold text-[11px] shrink-0 ${
+                        sub?.submitted
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200'
+                      }`}
+                    >
+                      {mName.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-medium text-slate-800 dark:text-slate-100 truncate">{mName}</span>
+                        {isMe && (
+                          <span className="text-[10px] px-1 rounded font-semibold bg-indigo-100 dark:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300">
+                            You
+                          </span>
+                        )}
+                      </div>
+                      {sub?.submitted ? (
+                        <span className="inline-flex items-center gap-1 tabular-nums text-emerald-700 dark:text-emerald-400">
+                          <Check className="w-3 h-3" aria-hidden="true" />
+                          Rated {sub.score?.toFixed(2)} / 5
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" aria-hidden="true" />
+                          Pending rating
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[11px] text-slate-400 dark:text-slate-500 shrink-0">Mgr {i + 1}</span>
+                  </li>
+                );
+              })}
+            </ul>
+            {review.managerScore !== undefined && review.managerScore > 0 && (
+              <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-300 tabular-nums">
+                Combined average: <strong className="text-indigo-600 dark:text-indigo-400">{review.managerScore.toFixed(2)}</strong> / 5
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Audit trail trigger */}
+        <div className="px-4 pb-4">
           <button
             type="button"
             onClick={() => setShowAuditModal(!showAuditModal)}
-            className={`text-xs px-2.5 py-1 rounded-lg border transition-colors flex items-center gap-1.5 cursor-pointer ${
+            className={`w-full text-xs px-2.5 py-1.5 rounded-md border transition-colors flex items-center gap-1.5 cursor-pointer ${
               showAuditModal
                 ? 'bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white border-slate-300 dark:border-slate-600'
-                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750'
+                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
-            <History className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Audit trail</span>
-            <span className="tabular-nums text-[11px] bg-slate-100 dark:bg-slate-700 px-1 rounded">
+            <History className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>Audit trail</span>
+            <span className="ml-auto tabular-nums text-[11px] text-slate-500 dark:text-slate-400">
               {review.actionHistory?.length || 0}
             </span>
           </button>
         </div>
-
-        {/* DUAL MANAGER EVALUATION PIPELINE STRIP */}
-        {isDualManager && (
-          <div className="px-6 py-2 bg-slate-50/90 dark:bg-slate-850/90 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-              <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 font-semibold text-[11px] uppercase tracking-wider">
-                <Users className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                <span>Dual Reviewers:</span>
-              </div>
-
-              {/* Parallel Reviewers Track */}
-              <div className="flex items-center gap-2 flex-wrap">
-                {assignedManagerIds.map((mId, i) => {
-                  const mName = review.managerNames?.[i] || (i === 0 ? review.managerName : `Manager ${i + 1}`);
-                  const sub = review.managerSubmissions?.[mId];
-                  const isMe = currentUser?.employeeId === mId || currentUser?.id === mId;
-                  const initial = mName.charAt(0).toUpperCase();
-
-                  return (
-                    <div
-                      key={mId}
-                      className={`flex items-center gap-2 px-2.5 py-1 rounded-lg border text-xs transition-all ${
-                        sub?.submitted
-                          ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/70 text-emerald-900 dark:text-emerald-200'
-                          : 'bg-white dark:bg-slate-800 border-amber-200 dark:border-amber-800/70 text-amber-900 dark:text-amber-200 shadow-2xs'
-                      }`}
-                    >
-                      <div
-                        className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 ${
-                          sub?.submitted
-                            ? 'bg-emerald-600 text-white'
-                            : 'bg-amber-500 text-white'
-                        }`}
-                      >
-                        {initial}
-                      </div>
-
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-semibold text-slate-800 dark:text-slate-200">
-                          {mName}
-                        </span>
-                        {isMe && (
-                          <span className="text-[9px] px-1.5 py-0.2 rounded font-bold bg-indigo-100 dark:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300">
-                            You
-                          </span>
-                        )}
-                        <span className="text-[10px] text-slate-400 dark:text-slate-500">
-                          (Mgr {i + 1})
-                        </span>
-                      </div>
-
-                      <span className="text-slate-300 dark:text-slate-600">·</span>
-
-                      {sub?.submitted ? (
-                        <span className="font-bold tabular-nums text-emerald-700 dark:text-emerald-400 flex items-center gap-1 text-[11px]">
-                          <Check className="w-3 h-3 text-emerald-600" />
-                          <span>Rated {sub.score?.toFixed(2)}/5</span>
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                          <span>Pending rating</span>
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Pipeline Outcome Rule */}
-            <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
-              {review.managerScore !== undefined && review.managerScore > 0 ? (
-                <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-semibold text-slate-800 dark:text-slate-200">
-                  Combined Average: <strong className="text-indigo-600 dark:text-indigo-400">{review.managerScore.toFixed(2)}</strong> / 5.00
-                </span>
-              ) : (
-                <span className="hidden lg:inline text-slate-500 dark:text-slate-400 italic">
-                  Ratings will average automatically upon co-manager submission
-                </span>
-              )}
-            </div>
+        </div>
+        {/* MODAL FOOTER WITH GUIDED STEPPER NAVIGATION */}
+        {/* Rail actions: buttons grow to fill each row (close lives in the rail header) */}
+        <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex flex-col gap-2 shrink-0 [&_button]:grow [&_button]:justify-center">
+          {/* Status Transitions for HR / Admin */}
+          <div className="flex empty:hidden">
+            {isHrOrAdmin && !review.isClosed && review.status === 'HR_PENDING' && (
+              <button
+                type="button"
+                onClick={() => setReturnModalMode('HR')}
+                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors flex items-center space-x-1 cursor-pointer"
+                title="Return review to the Manager or HOD for recalibration"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Return for recalibration</span>
+              </button>
+            )}
           </div>
-        )}
 
-        {/* LIVE SCORE BANNER */}
-        {wizardStep === 2 && (
-          <ScoreSummaryBar
-            computedScore={computedScore}
-            scoreTier={scoreTier}
-            unratedCount={unratedCount}
-            isDualManager={isDualManager}
-          />
-        )}
-        {wizardStep === 3 && (
-          <ScoreSummaryBar
-            computedScore={computedHodScore}
-            scoreTier={hodScoreTier}
-            unratedCount={unratedHodCount}
-          />
-        )}
-        {/* MODAL BODY */}
-        <div className="p-6 overflow-y-auto flex-1">
+          {/* Stepper Navigation Buttons */}
+          <div className="flex flex-wrap items-center gap-2">
+            {wizardStep > 1 && (
+              <button
+                type="button"
+                onClick={() => setWizardStep((prev) => (isDirectToHod && prev === 4 ? 2 : prev - 1) as 1 | 2 | 3 | 4)}
+                className="px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 rounded-xl transition-colors flex items-center space-x-1 cursor-pointer"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                <span>Back</span>
+              </button>
+            )}
+
+            {wizardStep === 3 && canHodAct ? (
+              review.employeeStatus === 'INACTIVE' ? (
+                <div className="text-xs font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-3 py-2 rounded-xl border border-rose-200 dark:border-rose-800">
+                  Can't submit: the employee is inactive
+                </div>
+              ) : (
+                <div className="contents">
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => handleSaveHodScores(true)}
+                    className="px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 rounded-xl transition-colors flex items-center space-x-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                    <span>Save draft</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => setReturnModalMode('HOD')}
+                    className="px-3.5 py-2 text-xs font-bold text-amber-800 dark:text-amber-200 bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/60 dark:hover:bg-amber-900/60 border border-amber-300 dark:border-amber-800 rounded-xl transition-colors flex items-center space-x-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                    <span>Return to manager</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => handleSaveHodScores(false)}
+                    className="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 rounded-xl shadow-sm transition-colors flex items-center space-x-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                    <span>
+                      {openHodReturn
+                        ? `Resubmit to HR (${openHodReturn.kraIds.length - unaddressedHodKras.length}/${openHodReturn.kraIds.length})`
+                        : 'Submit to HR'}
+                    </span>
+                  </button>
+                </div>
+              )
+            ) : wizardStep === 2 && managerCanSubmit ? (
+              review.employeeStatus === 'INACTIVE' ? (
+                <div className="text-xs font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-3 py-2 rounded-xl border border-rose-200 dark:border-rose-800">
+                  Can't submit: the employee is inactive
+                </div>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => handleSaveScores(true)}
+                    className="px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 rounded-xl transition-colors flex items-center space-x-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                    <span>Save draft</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => handleSaveScores(false)}
+                    className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 rounded-xl shadow-sm transition-colors flex items-center space-x-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                    <span>
+                      {openManagerReturn
+                        ? `Resubmit (${openManagerReturn.kraIds.length - unaddressedManagerKras.length}/${openManagerReturn.kraIds.length} addressed)`
+                        : review.reviewType === 'PIP_WEEKLY'
+                        ? 'Submit & Complete Weekly Check-in'
+                        : 'Submit Evaluation'}
+                    </span>
+                  </button>
+                </>
+              )
+            ) : wizardStep === 4 && isHrOrAdmin && canEdit ? (
+              review.employeeStatus === 'INACTIVE' ? (
+                <div className="text-xs font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-3 py-2 rounded-xl border border-rose-200 dark:border-rose-800">
+                  Can't submit: the employee is inactive
+                </div>
+              ) : (
+                <div className="contents">
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => handleSaveScores(true)}
+                    className="px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 rounded-xl transition-colors flex items-center space-x-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                    <span>Save draft</span>
+                  </button>
+
+                  {review.status !== 'HR_COMPLETED' && (
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => setShowStatusModal('HR_COMPLETED')}
+                      className="px-3.5 py-2 text-xs font-bold text-emerald-800 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 border border-emerald-300 dark:border-emerald-800 rounded-xl transition-colors flex items-center space-x-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserCheck className="w-3.5 h-3.5" />}
+                      <span>Approve (HR)</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => setShowStatusModal('CLOSED')}
+                    className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 rounded-xl shadow-sm transition-colors flex items-center space-x-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
+                    <span>Final lock & close</span>
+                  </button>
+                </div>
+              )
+            ) : wizardStep < 4 ? (
+              <button
+                type="button"
+                onClick={() => setWizardStep((prev) => (isDirectToHod && prev === 2 ? 4 : prev + 1) as 1 | 2 | 3 | 4)}
+                className="px-4 py-2 text-xs font-bold text-white bg-slate-900 dark:bg-indigo-600 hover:bg-indigo-600 dark:hover:bg-indigo-500 rounded-xl transition-colors flex items-center space-x-1.5 cursor-pointer"
+              >
+                <span>{isDirectToHod && wizardStep === 2 ? 'Continue to final review' : `Continue to Step ${wizardStep + 1}`}</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        </aside>
+
+        {/* KRA SCORING AREA: full height */}
+        <main className="flex-1 min-w-0 min-h-0 flex flex-col">
+        <div className="overflow-y-auto flex-1 min-h-0">
+        <div className="px-6 py-5">
           {/* Enter-only slide: the new step mounts at once, so "Jump to KRA" scrolling still finds its card */}
           <m.div
             key={wizardStep}
@@ -1301,6 +1468,7 @@ export const ReviewScoringModal: React.FC<ReviewScoringModalProps> = ({
             />
           )}
           </m.div>
+        </div>
         </div>
 
         {/* Sticky Inline In-Modal Warning Banner pinned right above the footer */}
@@ -1383,172 +1551,7 @@ export const ReviewScoringModal: React.FC<ReviewScoringModalProps> = ({
           </div>
         )}
 
-        {/* MODAL FOOTER WITH GUIDED STEPPER NAVIGATION */}
-        <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-900/90 flex flex-wrap items-center justify-between gap-3">
-          {/* Status Transitions for HR / Admin */}
-          <div className="flex items-center space-x-2">
-            {isHrOrAdmin && !review.isClosed && review.status === 'HR_PENDING' && (
-              <button
-                type="button"
-                onClick={() => setReturnModalMode('HR')}
-                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors flex items-center space-x-1 cursor-pointer"
-                title="Return review to the Manager or HOD for recalibration"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Return for recalibration</span>
-              </button>
-            )}
-          </div>
-
-          {/* Stepper Navigation Buttons */}
-          <div className="flex items-center space-x-2">
-            <button
-              type="button"
-              onClick={handleAttemptClose}
-              className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
-            >
-              Cancel
-            </button>
-
-            {wizardStep > 1 && (
-              <button
-                type="button"
-                onClick={() => setWizardStep((prev) => (prev - 1) as 1 | 2 | 3 | 4)}
-                className="px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 rounded-xl transition-colors flex items-center space-x-1 cursor-pointer"
-              >
-                <ChevronLeft className="w-3.5 h-3.5" />
-                <span>Back</span>
-              </button>
-            )}
-
-            {wizardStep === 3 && canHodAct ? (
-              review.employeeStatus === 'INACTIVE' ? (
-                <div className="text-xs font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-3 py-2 rounded-xl border border-rose-200 dark:border-rose-800">
-                  Can't submit: the employee is inactive
-                </div>
-              ) : (
-                <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => handleSaveHodScores(true)}
-                    className="px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 rounded-xl transition-colors flex items-center space-x-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                    <span>Save draft</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => setReturnModalMode('HOD')}
-                    className="px-3.5 py-2 text-xs font-bold text-amber-800 dark:text-amber-200 bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/60 dark:hover:bg-amber-900/60 border border-amber-300 dark:border-amber-800 rounded-xl transition-colors flex items-center space-x-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
-                    <span>Return to manager</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => handleSaveHodScores(false)}
-                    className="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 rounded-xl shadow-sm transition-colors flex items-center space-x-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                    <span>
-                      {openHodReturn
-                        ? `Resubmit to HR (${openHodReturn.kraIds.length - unaddressedHodKras.length}/${openHodReturn.kraIds.length})`
-                        : 'Submit to HR'}
-                    </span>
-                  </button>
-                </div>
-              )
-            ) : wizardStep === 2 && managerCanSubmit ? (
-              review.employeeStatus === 'INACTIVE' ? (
-                <div className="text-xs font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-3 py-2 rounded-xl border border-rose-200 dark:border-rose-800">
-                  Can't submit: the employee is inactive
-                </div>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => handleSaveScores(true)}
-                    className="px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 rounded-xl transition-colors flex items-center space-x-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                    <span>Save draft</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => handleSaveScores(false)}
-                    className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 rounded-xl shadow-sm transition-colors flex items-center space-x-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                    <span>
-                      {openManagerReturn
-                        ? `Resubmit (${openManagerReturn.kraIds.length - unaddressedManagerKras.length}/${openManagerReturn.kraIds.length} addressed)`
-                        : review.reviewType === 'PIP_WEEKLY'
-                        ? 'Submit & Complete Weekly Check-in'
-                        : 'Submit Evaluation'}
-                    </span>
-                  </button>
-                </>
-              )
-            ) : wizardStep === 4 && isHrOrAdmin && canEdit ? (
-              review.employeeStatus === 'INACTIVE' ? (
-                <div className="text-xs font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-3 py-2 rounded-xl border border-rose-200 dark:border-rose-800">
-                  Can't submit: the employee is inactive
-                </div>
-              ) : (
-                <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => handleSaveScores(true)}
-                    className="px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 rounded-xl transition-colors flex items-center space-x-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                    <span>Save draft</span>
-                  </button>
-
-                  {review.status !== 'HR_COMPLETED' && (
-                    <button
-                      type="button"
-                      disabled={saving}
-                      onClick={() => setShowStatusModal('HR_COMPLETED')}
-                      className="px-3.5 py-2 text-xs font-bold text-emerald-800 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 border border-emerald-300 dark:border-emerald-800 rounded-xl transition-colors flex items-center space-x-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                      {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserCheck className="w-3.5 h-3.5" />}
-                      <span>Approve (HR)</span>
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => setShowStatusModal('CLOSED')}
-                    className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 rounded-xl shadow-sm transition-colors flex items-center space-x-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
-                    <span>Final lock & close</span>
-                  </button>
-                </div>
-              )
-            ) : wizardStep < 4 ? (
-              <button
-                type="button"
-                onClick={() => setWizardStep((prev) => (prev + 1) as 1 | 2 | 3 | 4)}
-                className="px-4 py-2 text-xs font-bold text-white bg-slate-900 dark:bg-indigo-600 hover:bg-indigo-600 dark:hover:bg-indigo-500 rounded-xl transition-colors flex items-center space-x-1.5 cursor-pointer"
-              >
-                <span>Continue to Step {wizardStep + 1}</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            ) : null}
-          </div>
-        </div>
+        </main>
 
         {/* STATUS REMARKS MODAL OVERLAY */}
         <StatusRemarksModal

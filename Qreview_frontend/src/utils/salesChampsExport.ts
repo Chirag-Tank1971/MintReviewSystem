@@ -57,27 +57,33 @@ export const DEFAULT_CHAMPS_RULES: ChampsRules = {
   teamThreshold: true,
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  HTML Generator — replicates the MINT Champs PDF template exactly
-// ─────────────────────────────────────────────────────────────────────────────
+/** Escapes text typed by HR so it can never become markup in the print window or PDF. */
+export function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
-export function generateChampsHtml(data: ChampsReportData): string {
+/** Indian financial year (April–March) containing `date`, in the formats the scheme document uses. */
+export function financialYearFor(date = new Date()) {
+  const start = date.getMonth() >= 3 ? date.getFullYear() : date.getFullYear() - 1;
+  return {
+    label: `FY ${start}-${String(start + 1).slice(-2)}`,
+    range: `01.04.${start} – 31.03.${start + 1}`,
+    published: `1st April ${start}`,
+  };
+}
+
+/**
+ * Terms & Conditions as HTML list items, split into the document's two columns. Shared by the
+ * PDF/print template and the in-app employee view so both always show the same, HR-selected terms.
+ * Every item is a fixed string except customRuleText, which is escaped.
+ */
+export function champsTermsHtml(data: Pick<ChampsReportData, 'rules' | 'customRuleText'>): { left: string[]; right: string[] } {
   const rules: ChampsRules = { ...DEFAULT_CHAMPS_RULES, ...(data.rules || {}) };
-  const mintValue = data.mintValue || 'Strive for Excellence';
-  const fy = data.financialYear || 'FY 2026-27';
-  const schemeName = data.incentiveSchemeName ? ` ( ${data.incentiveSchemeName} )` : '';
-
-  const slabRows = (data.slabs || [])
-    .map(
-      (s, i) => `
-    <tr class="${i % 2 === 0 ? 'row-even' : 'row-odd'}">
-      <td>${s.amcTargetLacs}</td>
-      <td>${s.amcIncentiveLacs.toFixed(2)}</td>
-      <td>${s.gm2AchievementLacs}</td>
-      <td>${s.salesIncentiveLacs.toFixed(2)}</td>
-    </tr>`
-    )
-    .join('');
 
   // Left T&C column
   const leftTCs: string[] = [];
@@ -136,14 +142,45 @@ export function generateChampsHtml(data: ChampsReportData): string {
   rightTCs.push(`<li>The incentive is applicable after completing work for the complete FY and meeting the above achievement, and collecting all outstanding dues for this financial year.</li>`);
   rightTCs.push(`<li>Scheme can be withdrawn at any stage; this is to incentivise the sales person and does not legally bind the company.</li>`);
   if (data.customRuleText) {
-    rightTCs.push(`<li>${data.customRuleText}</li>`);
+    rightTCs.push(`<li>${escapeHtml(data.customRuleText)}</li>`);
   }
+
+  return { left: leftTCs, right: rightTCs };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  HTML Generator — replicates the MINT Champs PDF template exactly
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function generateChampsHtml(data: ChampsReportData): string {
+  const mintValue = escapeHtml(data.mintValue || 'Strive for Excellence');
+  const fy = escapeHtml(data.financialYear || financialYearFor().label);
+  const name = escapeHtml(data.employeeName);
+  const schemeName = data.incentiveSchemeName ? ` ( ${escapeHtml(data.incentiveSchemeName)} )` : '';
+  // Date range and published date are optional; leave them out rather than show a wrong year
+  const fyMeta = [
+    `${fy}${data.fyDateRange ? ` (${escapeHtml(data.fyDateRange)})` : ''}`,
+    `MINT-Internal Document${data.publishedDate ? ` &ndash; Published ${escapeHtml(data.publishedDate)}` : ''}`,
+  ].join(' &nbsp;|&nbsp; ');
+  const { left: leftTCs, right: rightTCs } = champsTermsHtml(data);
+
+  const slabRows = (data.slabs || [])
+    .map(
+      (s, i) => `
+    <tr class="${i % 2 === 0 ? 'row-even' : 'row-odd'}">
+      <td>${Number(s.amcTargetLacs) || 0}</td>
+      <td>${(Number(s.amcIncentiveLacs) || 0).toFixed(2)}</td>
+      <td>${Number(s.gm2AchievementLacs) || 0}</td>
+      <td>${(Number(s.salesIncentiveLacs) || 0).toFixed(2)}</td>
+    </tr>`
+    )
+    .join('');
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>${data.employeeName} &mdash; MINT Champs ${fy}</title>
+  <title>${name} &mdash; MINT Champs ${fy}</title>
   <style>
     @page { size: A4 landscape; margin: 0; }
     * {
@@ -344,9 +381,9 @@ export function generateChampsHtml(data: ChampsReportData): string {
 
   <!-- EMPLOYEE BANNER -->
   <div class="employee-banner">
-    <div class="employee-name">${data.employeeName} &mdash; MINT Champs <span class="fy-accent">${fy}</span></div>
+    <div class="employee-name">${name} &mdash; MINT Champs <span class="fy-accent">${fy}</span></div>
     <div class="employee-meta">
-      M Intergraph Systems Pvt Ltd &nbsp;|&nbsp; ${fy} (${data.fyDateRange}) &nbsp;|&nbsp; MINT-Internal Document &ndash; Published ${data.publishedDate}
+      M Intergraph Systems Pvt Ltd &nbsp;|&nbsp; ${fyMeta}
     </div>
   </div>
 
@@ -356,7 +393,7 @@ export function generateChampsHtml(data: ChampsReportData): string {
     <!-- GM2 TARGET -->
     <div class="target-card">
       <div class="target-label">Bottom Line &ndash; Individual Target (GM2 Margin)</div>
-      <div class="target-value">&#8377;${data.gm2TargetCr}</div>
+      <div class="target-value">&#8377;${escapeHtml(data.gm2TargetCr)}</div>
     </div>
 
     <!-- INCENTIVE SLAB TABLE -->
@@ -442,7 +479,7 @@ export async function downloadChampsPdf(data: ChampsReportData): Promise<void> {
     pdf.addImage(imgData, 'JPEG', 0, 0, w, h);
 
     const safeName = data.employeeName.replace(/[^a-zA-Z0-9 _-]/g, '').replace(/\s+/g, '_');
-    const fySlug = (data.financialYear || 'FY2026-27').replace(/\s/g, '');
+    const fySlug = (data.financialYear || financialYearFor().label).replace(/[^a-zA-Z0-9-]/g, '');
     pdf.save(`MINT_Champs_${fySlug}_${safeName}.pdf`);
   } finally {
     document.body.removeChild(container);

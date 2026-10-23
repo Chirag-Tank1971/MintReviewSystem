@@ -21,6 +21,7 @@ import {
   ReviewSummaryStats,
 } from '../../src/types/index.js';
 import { sendNotificationEmail, resolveRecipient } from '../services/emailService.js';
+import { refreshEmployeeAppraisalScores } from '../services/appraisalScoring.js';
 import { renderSelfAssessmentSubmittedEmail, renderManagerReviewSubmittedEmail } from '../services/emailTemplates.js';
 import {
   generateQuarterlyReviews,
@@ -628,7 +629,14 @@ reviewRouter.get(
         // Strictly scoped to reviews where this HOD is the employee's configured HOD —
         // not every review in the HOD's department (an HOD role does not imply ownership
         // of every employee's review in that department).
-        reviews = reviews.filter((r) => r.hodId === managerEmployeeId && r.status === 'HOD_PENDING');
+        // Direct-to-HOD employees: the HOD holds the scoring (manager) slot, so those reviews
+        // are pending with the HOD from the start.
+        reviews = reviews.filter(
+          (r) =>
+            (r.hodId === managerEmployeeId && r.status === 'HOD_PENDING') ||
+            (r.managerId === managerEmployeeId &&
+              (r.status === 'MANAGER_PENDING' || r.status === 'RETURNED' || r.status === 'DRAFT'))
+        );
       } else if (role === 'REPORTING_MANAGER' || role === 'MANAGER') {
         const allEmployees: Employee[] = await (await employeesCol.find({})).toArray();
         const directReportIds = new Set(
@@ -1254,6 +1262,8 @@ reviewRouter.put(
     let newStatus: ReviewStatus = existing.status;
     let submittedByManager = false;
     let skippedHodForHrReturn = false;
+    // Direct-to-HOD employees: the HOD already scored in this step, so there is no separate HOD pass.
+    const skipsHodStep = Boolean(existing.reportsDirectlyToHod);
 
     if (isSubmitting) {
       if (existing.reviewType === 'PIP_WEEKLY') {
@@ -1265,7 +1275,7 @@ reviewRouter.put(
         // Dual manager: one manager submitted, keep MANAGER_PENDING until the other completes
         newStatus = 'MANAGER_PENDING';
         submittedByManager = false;
-      } else if (wasReturnedByHrToManager) {
+      } else if (wasReturnedByHrToManager || skipsHodStep) {
         newStatus = 'HR_PENDING';
         skippedHodForHrReturn = true;
         submittedByManager = true;
@@ -1277,7 +1287,7 @@ reviewRouter.put(
 
     // HR returned to both: the Manager's resubmission goes to the HOD (not straight to HR).
     const activatedHodLeg = returnEdits.activatedRequest;
-    if (activatedHodLeg && allManagersSubmitted) {
+    if (activatedHodLeg && allManagersSubmitted && !skipsHodStep) {
       newStatus = 'HOD_PENDING';
       skippedHodForHrReturn = false;
     }
@@ -1343,6 +1353,8 @@ reviewRouter.put(
               ? ' Sent directly back to HR without another HOD pass.'
               : ''
           }`
+        : skippedHodForHrReturn && !wasReturnedByHrToManager
+        ? `HOD submitted evaluation scores (${managerScore}) for a direct-to-HOD employee — sent to HR.`
         : skippedHodForHrReturn
         ? `${roleLabel} resubmitted evaluation scores (${managerScore}) after HR return — sent directly back to HR without another HOD pass.`
         : isSubmitting
@@ -1394,6 +1406,11 @@ reviewRouter.put(
     };
 
     await reviewCol.updateOne({ id }, { $set: updatedReview });
+
+    // HR_PENDING counts as evaluated, so the open appraisal's rolling score moves now.
+    if (isSubmitting && newStatus === 'HR_PENDING') {
+      await refreshEmployeeAppraisalScores(existing.employeeId);
+    }
 
     // When a weekly PIP review completes, auto-record a check-in on the PIP document
     if (isSubmitting && existing.pipId && existing.reviewType === 'PIP_WEEKLY') {
@@ -1501,10 +1518,14 @@ reviewRouter.put(
               userId: 'ALL',
               userRole: 'HR',
               type: 'HR_PENDING',
-              title: `Review Resubmitted: ${existing.employeeName}`,
+              title: wasReturnedByHrToManager || resolvedReturn
+                ? `Review Resubmitted: ${existing.employeeName}`
+                : `Review Ready for HR Approval: ${existing.employeeName}`,
               message: resolvedReturn
                 ? `${req.user?.name || 'Manager'} re-evaluated the returned KRAs for ${existing.employeeName}: ${describeChanges(returnEdits.changes || [])}. Ready for your review.`
-                : `${req.user?.name || 'Manager'} resubmitted evaluation scores (${managerScore}) for ${existing.employeeName} after your return. Ready for your review.`,
+                : wasReturnedByHrToManager
+                ? `${req.user?.name || 'Manager'} resubmitted evaluation scores (${managerScore}) for ${existing.employeeName} after your return. Ready for your review.`
+                : `${req.user?.name || 'HOD'} (HOD) scored ${existing.employeeName}'s ${existing.reviewPeriodName} review (${managerScore}). Ready for your review.`,
               isRead: false,
               priority: 'HIGH',
               metadata: { reviewId: id, periodId: existing.reviewPeriodId, status: newStatus },

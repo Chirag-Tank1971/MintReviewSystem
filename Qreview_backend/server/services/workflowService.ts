@@ -471,7 +471,9 @@ export async function submitManagerReview(
     !isDualManager || assignedManagerIds.every((mId) => managerSubmissions[mId]?.submitted);
 
   let finalScore = thisManagerScore;
-  let nextStatus: ReviewStatus = 'HOD_PENDING';
+  // Direct-to-HOD employees: the HOD scored in this step, so it goes straight to HR.
+  const skipsHodStep = Boolean(review.reportsDirectlyToHod);
+  let nextStatus: ReviewStatus = skipsHodStep ? 'HR_PENDING' : 'HOD_PENDING';
 
   if (isDualManager && !allManagersSubmitted) {
     nextStatus = 'MANAGER_PENDING';
@@ -532,6 +534,11 @@ export async function submitManagerReview(
 
   await reviewCol.updateOne({ id: reviewId }, { $set: updated });
 
+  // HR_PENDING counts as evaluated, so the open appraisal's rolling score moves now.
+  if (nextStatus === 'HR_PENDING') {
+    await refreshEmployeeAppraisalScores(review.employeeId);
+  }
+
   // Notify HOD (or HR, if no HOD is configured) and auto-resolve previous return/assignment notifications
   const notifCol = getDbCollection('notifications');
   await notifCol.updateMany(
@@ -550,6 +557,19 @@ export async function submitManagerReview(
       type: 'HOD_MISSING_EXCEPTION',
       title: `Review Blocked: No HOD Configured for ${review.employeeName}`,
       message: `${user.name} submitted a review for ${review.employeeName}, but no HOD is assigned to this employee. Assign an HOD to unblock the review.`,
+      isRead: false,
+      priority: 'HIGH',
+      metadata: { reviewId, periodId: review.reviewPeriodId, status: nextStatus },
+      createdAt: now,
+    });
+  } else if (skipsHodStep) {
+    await notifCol.insertOne({
+      id: `notif_${reviewId}_hr_pending_${Date.now()}`,
+      userId: 'ALL',
+      userRole: 'HR',
+      type: 'HR_PENDING',
+      title: `Review Ready for HR Approval: ${review.employeeName}`,
+      message: `${user.name} (HOD) scored ${review.employeeName}'s ${review.reviewPeriodName} review (${finalScore}).`,
       isRead: false,
       priority: 'HIGH',
       metadata: { reviewId, periodId: review.reviewPeriodId, status: nextStatus },
