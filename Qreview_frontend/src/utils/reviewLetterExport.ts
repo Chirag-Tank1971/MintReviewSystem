@@ -1,5 +1,4 @@
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import { loadPdfLibs } from './pdfLibs';
 import { EmployeeReview, ReviewKraSnapshot } from '../types';
 import { LetterSettings, DEFAULT_LETTER_SETTINGS } from './letterExport';
 
@@ -241,6 +240,7 @@ export async function downloadReviewLetterPdf(
   settings: LetterSettings = DEFAULT_LETTER_SETTINGS,
   filename?: string
 ): Promise<void> {
+  const { jsPDF, html2canvas } = await loadPdfLibs();
   const htmlContent = generateReviewLetterHtml(review, settings);
 
   const container = document.createElement('div');

@@ -1,5 +1,4 @@
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import { loadPdfLibs } from './pdfLibs';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Types
@@ -456,6 +455,7 @@ export function printChampsReport(data: ChampsReportData): void {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function downloadChampsPdf(data: ChampsReportData): Promise<void> {
+  const { jsPDF, html2canvas } = await loadPdfLibs();
   const html = generateChampsHtml(data);
 
   const container = document.createElement('div');

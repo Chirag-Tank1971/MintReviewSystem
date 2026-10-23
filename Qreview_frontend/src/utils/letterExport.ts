@@ -1,6 +1,4 @@
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
-import JSZip from 'jszip';
+import { loadPdfLibs } from './pdfLibs';
 import { Appraisal } from '../types';
 
 export interface LetterSettings {
@@ -505,6 +503,7 @@ export async function downloadAppraisalPdf(
   settings: LetterSettings = DEFAULT_LETTER_SETTINGS,
   filename?: string
 ): Promise<void> {
+  const { jsPDF, html2canvas } = await loadPdfLibs();
   const htmlContent = generateLetterHtml(appraisal, settings);
 
   // Render HTML in hidden off-screen container for crisp html2canvas rendering
@@ -564,6 +563,7 @@ async function generateAppraisalPdfBlob(
   appraisal: Appraisal,
   settings: LetterSettings = DEFAULT_LETTER_SETTINGS
 ): Promise<{ filename: string; blob: Blob }> {
+  const { jsPDF, html2canvas } = await loadPdfLibs();
   const htmlContent = generateLetterHtml(appraisal, settings);
 
   const container = document.createElement('div');
@@ -611,6 +611,7 @@ export async function exportAppraisalsToZip(
   settings: LetterSettings = DEFAULT_LETTER_SETTINGS,
   onProgress?: (current: number, total: number) => void
 ): Promise<void> {
+  const { default: JSZip } = await import('jszip');
   const zip = new JSZip();
   const folder = zip.folder(`Appraisal_Letters_${appraisals[0]?.appraisalYear || 2026}`);
 
