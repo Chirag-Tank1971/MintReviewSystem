@@ -31,6 +31,7 @@ import {
   Tooltip as RechartsTooltip,
   ResponsiveContainer,
 } from 'recharts';
+import { CHART_COLORS } from '../config/chartColors';
 import {
   Sparkles,
   Search,
@@ -690,7 +691,7 @@ export const QuarterlyReviewView: React.FC<QuarterlyReviewViewProps> = ({
       withKraPct,
       withoutKraPct,
       chartData: [
-        { name: 'With KRA', value: withKra, color: '#6366f1', pct: withKraPct },
+        { name: 'With KRA', value: withKra, color: CHART_COLORS.secondary, pct: withKraPct },
         { name: 'Without KRA', value: withoutKra, color: '#cbd5e1', pct: withoutKraPct },
       ].filter((d) => d.value > 0),
     };

@@ -1,16 +1,19 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Trophy, Plus, Search, RefreshCw, Lock, CheckCircle2,
-  FileText, Download, Printer, Pencil, Loader2, Filter,
-  ShieldCheck, Clock, AlertCircle,
+  Download, Printer, Pencil, Loader2, Trash2, AlertTriangle,
 } from 'lucide-react';
 import { Employee, Department } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import { toast } from '../context/ToastContext';
 import { PageHeader } from './ui/PageHeader';
+import { Button } from './ui/Button';
+import { StatusBadge } from './ui/StatusBadge';
+import { SegmentedControl } from './ui/SegmentedControl';
+import { SELECT_CLASS } from './ui/formStyles';
 import { SalesChampsReportModal, SalesChampsReport } from './SalesChampsReportModal';
-import { downloadChampsPdf, printChampsReport, ChampsReportData } from '../utils/salesChampsExport';
+import { downloadChampsPdf, printChampsReport, champsTermsHtml, ChampsReportData } from '../utils/salesChampsExport';
 import { cn } from '../utils/cn';
 
 interface Props {
@@ -20,23 +23,11 @@ interface Props {
 
 type FilterStatus = 'ALL' | 'DRAFT' | 'FINAL' | 'LOCKED';
 
-const STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode; cls: string }> = {
-  DRAFT: {
-    label: 'Draft',
-    icon: <Clock className="w-3 h-3" />,
-    cls: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
-  },
-  FINAL: {
-    label: 'Final',
-    icon: <CheckCircle2 className="w-3 h-3" />,
-    cls: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
-  },
-  LOCKED: {
-    label: 'Locked',
-    icon: <Lock className="w-3 h-3" />,
-    cls: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
-  },
-};
+const STATUS_TONE = {
+  DRAFT: { label: 'Draft', tone: 'warning' },
+  FINAL: { label: 'Final', tone: 'info' },
+  LOCKED: { label: 'Locked', tone: 'success' },
+} as const;
 
 function toChampsData(r: SalesChampsReport): ChampsReportData {
   return {
@@ -52,6 +43,8 @@ function toChampsData(r: SalesChampsReport): ChampsReportData {
     customRuleText: r.customRuleText,
   };
 }
+
+type PendingConfirm = { kind: 'lock' | 'delete'; report: SalesChampsReport } | null;
 
 export const SalesChampsView: React.FC<Props> = ({ employees, departments }) => {
   const { user } = useAuth();
@@ -71,28 +64,29 @@ export const SalesChampsView: React.FC<Props> = ({ employees, departments }) => 
 
   const [actionLoading, setActionLoading] = useState<Record<string, string>>({});
   const [pdfLoading, setPdfLoading] = useState<string | null>(null);
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
 
   const load = useCallback(async () => {
     setIsLoading(true);
     try {
       if (isManagementOrAdmin) {
-        const data = await (api as any).getSalesChampsReports({
-          financialYear: fyFilter || undefined,
-          status: statusFilter !== 'ALL' ? statusFilter : undefined,
-        });
+        // Year and status are filtered client-side: the counts and year list stay complete, and the
+        // create form can see every existing report to block duplicates
+        const data = await api.getSalesChampsReports();
         setReports(data || []);
       } else if (user?.employeeId) {
-        const data = await (api as any).getMySalesChampsReports(user.employeeId, fyFilter || undefined);
+        const data = await api.getMySalesChampsReports(user.employeeId);
         setReports(data || []);
       } else {
         setReports([]);
       }
-    } catch {
-      toast.error('Failed to load Sales Champs reports.');
+      setSelectedIdx(0);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to load Sales Champs reports.');
     } finally {
       setIsLoading(false);
     }
-  }, [fyFilter, statusFilter, isManagementOrAdmin, user?.employeeId]);
+  }, [isManagementOrAdmin, user?.employeeId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -101,7 +95,9 @@ export const SalesChampsView: React.FC<Props> = ({ employees, departments }) => 
     return years.sort();
   }, [reports]);
 
-  const filtered = reports.filter((r) => {
+  const yearReports = fyFilter ? reports.filter((r) => r.financialYear === fyFilter) : reports;
+  const filtered = yearReports.filter((r) => {
+    if (statusFilter !== 'ALL' && (r.status || 'DRAFT') !== statusFilter) return false;
     const q = search.toLowerCase();
     return !q || r.employeeName.toLowerCase().includes(q) || r.financialYear.toLowerCase().includes(q);
   });
@@ -109,10 +105,11 @@ export const SalesChampsView: React.FC<Props> = ({ employees, departments }) => 
   const handleCreate = async (data: Omit<SalesChampsReport, 'id' | 'status'>) => {
     try {
       if (editingReport?.id) {
-        await (api as any).updateSalesChampsReport(editingReport.id, data);
-        toast.success('Report updated.');
+        const wasFinal = editingReport.status === 'FINAL';
+        await api.updateSalesChampsReport(editingReport.id, data);
+        toast.success(wasFinal ? 'Report updated and moved back to Draft for review.' : 'Report updated.');
       } else {
-        await (api as any).createSalesChampsReport(data);
+        await api.createSalesChampsReport(data);
         toast.success('Report created.');
       }
       await load();
@@ -122,29 +119,31 @@ export const SalesChampsView: React.FC<Props> = ({ employees, departments }) => 
     }
   };
 
-  const handleFinalize = async (id: string) => {
-    setActionLoading((p) => ({ ...p, [id]: 'finalize' }));
+  const runAction = async (id: string, kind: string, fn: () => Promise<unknown>, success: string) => {
+    setActionLoading((p) => ({ ...p, [id]: kind }));
     try {
-      await (api as any).finalizeSalesChampsReport(id);
-      toast.success('Report marked as Final.');
+      await fn();
+      toast.success(success);
       await load();
-    } catch {
-      toast.error('Failed to finalize.');
+    } catch (err: any) {
+      toast.error(err?.message || `Failed to ${kind} report.`);
     } finally {
       setActionLoading((p) => { const n = { ...p }; delete n[id]; return n; });
     }
   };
 
-  const handleLock = async (id: string) => {
-    setActionLoading((p) => ({ ...p, [id]: 'lock' }));
-    try {
-      await (api as any).lockSalesChampsReport(id);
-      toast.success('Report locked.');
-      await load();
-    } catch {
-      toast.error('Failed to lock.');
-    } finally {
-      setActionLoading((p) => { const n = { ...p }; delete n[id]; return n; });
+  const handleFinalize = (id: string) =>
+    runAction(id, 'finalize', () => api.finalizeSalesChampsReport(id), 'Report marked as Final.');
+
+  const handleConfirmed = async () => {
+    if (!pendingConfirm?.report.id) return;
+    const { kind, report } = pendingConfirm;
+    const id = report.id!;
+    setPendingConfirm(null);
+    if (kind === 'lock') {
+      await runAction(id, 'lock', () => api.lockSalesChampsReport(id), `Report locked. ${report.employeeName} has been notified.`);
+    } else {
+      await runAction(id, 'delete', () => api.deleteSalesChampsReport(id), 'Report deleted.');
     }
   };
 
@@ -160,6 +159,7 @@ export const SalesChampsView: React.FC<Props> = ({ employees, departments }) => 
   if (!isManagementOrAdmin) {
     const activeReport = reports[selectedIdx] || reports[0];
     const isPdfDl = activeReport?.id ? pdfLoading === activeReport.id : false;
+    const terms = activeReport ? champsTermsHtml(activeReport) : { left: [], right: [] };
 
     return (
       <div className="space-y-6">
@@ -168,131 +168,114 @@ export const SalesChampsView: React.FC<Props> = ({ employees, departments }) => 
           description="Your officially approved and locked sales incentive scheme document."
           actions={
             activeReport ? (
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => printChampsReport(toChampsData(activeReport))}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750 cursor-pointer"
-                >
-                  <Printer className="w-3.5 h-3.5" /> Print Preview
-                </button>
-                <button
-                  type="button"
+              <>
+                <Button icon={Printer} onClick={() => printChampsReport(toChampsData(activeReport))}>
+                  Print preview
+                </Button>
+                <Button
+                  variant="primary"
+                  icon={isPdfDl ? Loader2 : Download}
+                  iconSpin={isPdfDl}
                   disabled={isPdfDl}
                   onClick={() => handleDownloadPdf(activeReport)}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer disabled:opacity-50 shadow-sm"
                 >
-                  {isPdfDl ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-                  Download Official PDF
-                </button>
-              </div>
+                  Download PDF
+                </Button>
+              </>
             ) : undefined
           }
         />
 
         {isLoading ? (
-          <div className="flex items-center justify-center py-24 text-slate-400">
-            <Loader2 className="w-6 h-6 animate-spin mr-2" /> Loading your scheme document…
+          <div className="flex items-center justify-center py-24 text-slate-500 dark:text-slate-400 text-sm">
+            <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading your scheme document…
           </div>
         ) : !activeReport ? (
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-12 text-center max-w-lg mx-auto shadow-xs">
-            <div className="w-16 h-16 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto mb-4">
-              <Trophy className="w-8 h-8" />
-            </div>
-            <h3 className="text-base font-bold text-slate-900 dark:text-white">No Locked Incentive Scheme Available</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
-              Your MINT Champs incentive document will appear here once it has been officially reviewed and locked by administration.
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-12 text-center max-w-lg mx-auto">
+            <Trophy className="w-8 h-8 mx-auto mb-3 text-slate-400" aria-hidden="true" />
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">No incentive scheme yet</h3>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mt-1.5 leading-relaxed">
+              Your MINT Champs incentive document will appear here once it has been reviewed and locked by administration.
             </p>
           </div>
         ) : (
           <div className="space-y-4 max-w-5xl mx-auto">
             {reports.length > 1 && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">Financial Year:</span>
-                <div className="flex gap-1.5">
-                  {reports.map((r, i) => (
-                    <button
-                      key={r.id || i}
-                      onClick={() => setSelectedIdx(i)}
-                      className={cn(
-                        'px-3 py-1 rounded-lg text-xs font-semibold cursor-pointer transition-colors',
-                        selectedIdx === i
-                          ? 'bg-indigo-600 text-white'
-                          : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-750'
-                      )}
-                    >
-                      {r.financialYear}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <SegmentedControl
+                ariaLabel="Financial year"
+                options={reports.map((r, i) => ({ value: String(i), label: r.financialYear }))}
+                value={String(selectedIdx)}
+                onChange={(v) => setSelectedIdx(Number(v))}
+              />
             )}
 
-            {/* Scheme Document Card */}
-            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
+            {/* Scheme document: keeps the printed letterhead's look so it matches the PDF */}
+            <div className="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-white dark:bg-slate-900">
               <div className="bg-[#0d3b5e] text-white px-6 py-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <div className="text-2xl font-black tracking-tight">M<span className="text-emerald-400">INT</span></div>
+                  <div className="text-2xl font-bold tracking-tight">M<span className="text-emerald-400">INT</span></div>
                   <div className="text-[11px] text-slate-300 italic">MINT Value: {activeReport.mintValue || 'Strive for Excellence'}</div>
                 </div>
                 <div className="text-right">
-                  <div className="text-lg font-bold">MINT Champs {activeReport.financialYear}</div>
-                  <div className="text-[11px] text-slate-300">M Intergraph Systems Pvt Ltd &bull; MINT-Internal Document</div>
+                  <div className="text-lg font-semibold">MINT Champs {activeReport.financialYear}</div>
+                  <div className="text-[11px] text-slate-300">M Intergraph Systems Pvt Ltd · MINT-Internal Document</div>
                 </div>
               </div>
 
-              <div className="bg-gradient-to-r from-[#1e3a5f] via-[#1e40af] to-[#1d4ed8] text-white px-6 py-4 text-center">
-                <div className="text-xl font-bold tracking-tight">
-                  {activeReport.employeeName} &mdash; MINT Champs <span className="text-emerald-400">{activeReport.financialYear}</span>
+              <div className="bg-[#1e3a5f] text-white px-6 py-4 text-center">
+                <div className="text-xl font-semibold tracking-tight">
+                  {activeReport.employeeName} — MINT Champs <span className="text-emerald-400">{activeReport.financialYear}</span>
                 </div>
-                <div className="text-xs text-blue-100 mt-1 flex items-center justify-center gap-2 flex-wrap">
-                  <span>M Intergraph Systems Pvt Ltd</span>
-                  <span>&bull;</span>
-                  <span>{activeReport.financialYear} ({activeReport.fyDateRange || '01.04.2026 – 31.03.2027'})</span>
-                  <span>&bull;</span>
-                  <span>Published {activeReport.publishedDate || '1st April 2026'}</span>
-                  <span className="inline-flex items-center gap-1 bg-emerald-500/20 text-emerald-200 border border-emerald-400/40 text-[10px] font-bold px-2 py-0.5 rounded-full ml-1">
-                    <Lock className="w-3 h-3" /> Locked &amp; Official
+                <div className="text-xs text-slate-300 mt-1 flex items-center justify-center gap-2 flex-wrap">
+                  <span>{activeReport.financialYear}{activeReport.fyDateRange ? ` (${activeReport.fyDateRange})` : ''}</span>
+                  {activeReport.publishedDate && (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span>Published {activeReport.publishedDate}</span>
+                    </>
+                  )}
+                  <span className="inline-flex items-center gap-1 bg-emerald-500/20 text-emerald-200 border border-emerald-400/40 text-[11px] font-medium px-2 py-0.5 rounded-md ml-1">
+                    <Lock className="w-3 h-3" aria-hidden="true" /> Locked &amp; official
                   </span>
                 </div>
               </div>
 
               <div className="p-6 space-y-6">
-                <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-50 dark:bg-slate-850 p-4 rounded-xl border border-slate-200 dark:border-slate-800 border-l-4 border-l-[#0d3b5e]">
+                <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-50 dark:bg-slate-850 p-4 rounded-lg border border-slate-200 dark:border-slate-800">
                   <div>
-                    <span className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
-                      Bottom Line &ndash; Individual Target (GM2 Margin)
+                    <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                      Bottom line: individual target (GM2 margin)
                     </span>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Your annual GM2 achievement milestone requirement
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                      Your annual GM2 achievement requirement
                     </p>
                   </div>
-                  <div className="bg-gradient-to-r from-amber-600 to-amber-700 text-white font-black text-xl px-5 py-2 rounded-xl shadow-xs">
+                  <div className="text-2xl font-semibold tabular-nums text-slate-900 dark:text-white">
                     ₹{activeReport.gm2TargetCr}
                   </div>
                 </div>
 
                 <div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-[#0d3b5e] dark:text-blue-400 mb-2">
-                    Incentive Scheme {activeReport.incentiveSchemeName ? `(${activeReport.incentiveSchemeName})` : ''}
+                  <h4 className="text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    Incentive scheme {activeReport.incentiveSchemeName ? `(${activeReport.incentiveSchemeName})` : ''}
                   </h4>
-                  <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
-                    <table className="w-full text-xs">
-                      <thead className="bg-[#0d3b5e] text-white">
+                  <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+                    <table className="w-full text-xs tabular-nums">
+                      <thead className="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
                         <tr>
-                          <th className="py-2.5 px-3 text-center font-semibold">Total AMC Target<br/>in Lacs</th>
-                          <th className="py-2.5 px-3 text-center font-semibold">Incentive for AMC<br/>(in Lacs)</th>
-                          <th className="py-2.5 px-3 text-center font-semibold">GM2 Contribution Achievement<br/>(in Lacs)</th>
-                          <th className="py-2.5 px-3 text-center font-semibold">Total Incentive in Lacs<br/>(for Sales)</th>
+                          <th className="py-2.5 px-3 text-right font-medium">Total AMC target (Lacs)</th>
+                          <th className="py-2.5 px-3 text-right font-medium">Incentive for AMC (Lacs)</th>
+                          <th className="py-2.5 px-3 text-right font-medium">GM2 contribution achievement (Lacs)</th>
+                          <th className="py-2.5 px-3 text-right font-medium">Total incentive for sales (Lacs)</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-800 dark:text-slate-200">
                         {activeReport.slabs?.map((s, idx) => (
-                          <tr key={idx} className={idx % 2 === 0 ? 'bg-slate-50 dark:bg-slate-850' : 'bg-white dark:bg-slate-900'}>
-                            <td className="py-2.5 px-3 text-center font-semibold text-slate-800 dark:text-slate-200">{s.amcTargetLacs}</td>
-                            <td className="py-2.5 px-3 text-center font-semibold text-slate-800 dark:text-slate-200">{s.amcIncentiveLacs?.toFixed(2)}</td>
-                            <td className="py-2.5 px-3 text-center font-semibold text-slate-800 dark:text-slate-200">{s.gm2AchievementLacs}</td>
-                            <td className="py-2.5 px-3 text-center font-semibold text-slate-800 dark:text-slate-200">{s.salesIncentiveLacs?.toFixed(2)}</td>
+                          <tr key={idx}>
+                            <td className="py-2.5 px-3 text-right">{s.amcTargetLacs}</td>
+                            <td className="py-2.5 px-3 text-right">{(Number(s.amcIncentiveLacs) || 0).toFixed(2)}</td>
+                            <td className="py-2.5 px-3 text-right">{s.gm2AchievementLacs}</td>
+                            <td className="py-2.5 px-3 text-right font-semibold">{(Number(s.salesIncentiveLacs) || 0).toFixed(2)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -300,42 +283,19 @@ export const SalesChampsView: React.FC<Props> = ({ employees, departments }) => 
                   </div>
                 </div>
 
-                <div className="bg-slate-50 dark:bg-slate-850 rounded-xl p-5 border border-slate-200 dark:border-slate-800 text-xs">
-                  <h4 className="font-bold uppercase tracking-wider text-[#0d3b5e] dark:text-blue-400 mb-3">
-                    Terms &amp; Conditions
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-slate-700 dark:text-slate-300 leading-relaxed text-[11px]">
-                    <ul className="space-y-2 list-disc pl-4">
-                      <li><strong>Collection riders</strong> (payment timing multipliers):
-                        <ul className="list-circle pl-4 mt-1 space-y-0.5 text-slate-600 dark:text-slate-400">
-                          <li>Within 15 days: Achievement = Achv &times; 1.20</li>
-                          <li>Within 21 days: Achievement = Achv &times; 1.10</li>
-                          <li>Within 22–30 days: No adjustment</li>
-                          <li>Within 31–45 days: Achievement = Achv &times; 0.85</li>
-                          <li>After 45 days: Achievement = Achv &times; 0.75</li>
-                          <li>Add 7 days for Public Undertakings and 15 days for other Govt.</li>
-                        </ul>
-                      </li>
-                      <li><strong>Top Line</strong> is billing price to client without GST.</li>
-                      <li><strong>All One-time Repair:</strong> Contribution = Gross Margin &times; 0.8</li>
-                      <li><strong>Team Performance:</strong> Linked to individual achievement on sliding ratio scale.</li>
-                      <li><strong>Advance Withdrawal:</strong> You can withdraw ₹50,000/- per Qtr from your annual incentive.</li>
-                    </ul>
-                    <ul className="space-y-2 list-disc pl-4">
-                      <li><strong>MINT-AI™ Solutions:</strong> Orders carry a <strong>1.15&times; multiplier</strong> on GM2.</li>
-                      <li><strong>Q1 Target:</strong> Minimum 25% of annual GM2 must be achieved by Q1 end.</li>
-                      <li><strong>OEM back-end scheme:</strong> 50% calculated in Contribution achievement.</li>
-                      <li><strong>Company Team Threshold:</strong> If company total &lt; ₹600 Lacs GM2, payouts reduced by 25%.</li>
-                      <li><strong>BD Deductions:</strong> BD beyond 10% of Net Margin treated at 2&times; deduction.</li>
-                      {activeReport.customRuleText && <li>{activeReport.customRuleText}</li>}
-                    </ul>
+                <div className="bg-slate-50 dark:bg-slate-850 rounded-lg p-5 border border-slate-200 dark:border-slate-800">
+                  <h4 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">Terms &amp; conditions</h4>
+                  {/* Same HR-selected terms as the PDF; fixed strings plus escaped custom text */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-slate-700 dark:text-slate-300 leading-relaxed text-xs">
+                    <ul className="space-y-2 list-disc pl-4 [&_ul]:list-[circle] [&_ul]:text-slate-600 dark:[&_ul]:text-slate-400" dangerouslySetInnerHTML={{ __html: terms.left.join('') }} />
+                    <ul className="space-y-2 list-disc pl-4" dangerouslySetInnerHTML={{ __html: terms.right.join('') }} />
                   </div>
                 </div>
               </div>
 
-              <div className="bg-[#0d3b5e] text-white px-6 py-3 flex flex-wrap items-center justify-between text-xs text-slate-300">
+              <div className="bg-[#0d3b5e] text-white px-6 py-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-300">
                 <span><strong>MINT Value:</strong> {activeReport.mintValue || 'Strive for Excellence'}</span>
-                <span>solutions@mintergraph.com &bull; www.mintergraph.com</span>
+                <span>solutions@mintergraph.com · www.mintergraph.com</span>
               </div>
             </div>
           </div>
@@ -344,184 +304,165 @@ export const SalesChampsView: React.FC<Props> = ({ employees, departments }) => 
     );
   }
 
+  const countFor = (s: FilterStatus) => (s === 'ALL' ? yearReports.length : yearReports.filter((r) => (r.status || 'DRAFT') === s).length);
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Sales Champs"
-        description="Incentive scheme documents for the sales team"
+        description="Incentive scheme documents for the sales team. Draft → Final (HR) → Locked (Super Admin), then the employee can see it."
         actions={
-          (isAdmin || isHR) ? (
-            <button
-              onClick={() => { setEditingReport(null); setIsModalOpen(true); }}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors cursor-pointer shadow-sm"
-            >
-              <Plus className="w-4 h-4" /> New Report
-            </button>
-          ) : undefined
+          <Button variant="primary" size="md" icon={Plus} onClick={() => { setEditingReport(null); setIsModalOpen(true); }}>
+            New report
+          </Button>
         }
       />
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" aria-hidden="true" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name or year…"
-            className="w-full pl-8 pr-3 py-2 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+            aria-label="Search reports"
+            className="w-full h-8 pl-8 pr-3 text-xs border border-slate-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 focus:border-indigo-600"
           />
         </div>
 
         {fyOptions.length > 0 && (
-          <select
-            value={fyFilter}
-            onChange={(e) => setFyFilter(e.target.value)}
-            className="text-xs border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-          >
-            <option value="">All Years</option>
+          <select value={fyFilter} onChange={(e) => setFyFilter(e.target.value)} aria-label="Financial year" className={SELECT_CLASS}>
+            <option value="">All years</option>
             {fyOptions.map((fy) => <option key={fy} value={fy}>{fy}</option>)}
           </select>
         )}
 
-        <div className="flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-1 gap-0.5 text-xs font-semibold">
-          {(['ALL', 'DRAFT', 'FINAL', 'LOCKED'] as FilterStatus[]).map((s) => (
-            <button
-              key={s}
-              onClick={() => setStatusFilter(s)}
-              className={`px-2.5 py-1 rounded-md cursor-pointer transition-colors ${
-                statusFilter === s
-                  ? s === 'ALL' ? 'bg-slate-900 dark:bg-slate-600 text-white'
-                    : s === 'DRAFT' ? 'bg-amber-500 text-white'
-                    : s === 'FINAL' ? 'bg-blue-600 text-white'
-                    : 'bg-emerald-600 text-white'
-                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              {s === 'ALL' ? `All (${reports.length})` : `${s.charAt(0) + s.slice(1).toLowerCase()} (${reports.filter((r) => r.status === s).length})`}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          ariaLabel="Status"
+          options={(['ALL', 'DRAFT', 'FINAL', 'LOCKED'] as FilterStatus[]).map((s) => ({
+            value: s,
+            label: `${s === 'ALL' ? 'All' : STATUS_TONE[s].label} (${countFor(s)})`,
+          }))}
+          value={statusFilter}
+          onChange={setStatusFilter}
+        />
 
-        <button onClick={load} className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer">
-          <RefreshCw className="w-3.5 h-3.5" />
-        </button>
+        <Button variant="ghost" icon={RefreshCw} iconSpin={isLoading} onClick={load} aria-label="Refresh" />
       </div>
 
       {/* Table */}
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
         {isLoading ? (
-          <div className="flex items-center justify-center py-20 text-slate-400">
-            <Loader2 className="w-6 h-6 animate-spin mr-2" /> Loading reports…
+          <div className="flex items-center justify-center py-20 text-slate-500 dark:text-slate-400 text-sm">
+            <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading reports…
           </div>
         ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-3">
-            <Trophy className="w-10 h-10 opacity-30" />
-            <p className="text-sm font-medium">No reports found</p>
-            {(isAdmin || isHR) && (
-              <button
-                onClick={() => { setEditingReport(null); setIsModalOpen(true); }}
-                className="flex items-center gap-2 mt-1 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" /> Create First Report
-              </button>
+          <div className="flex flex-col items-center justify-center py-20 text-slate-500 dark:text-slate-400 gap-3">
+            <Trophy className="w-8 h-8 text-slate-400" aria-hidden="true" />
+            <p className="text-sm">No reports found</p>
+            {reports.length === 0 && (
+              <Button variant="primary" icon={Plus} onClick={() => { setEditingReport(null); setIsModalOpen(true); }}>
+                Create first report
+              </Button>
             )}
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
-              <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 font-semibold">
+              <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400">
                 <tr>
-                  <th className="py-3 px-4 text-left">#</th>
-                  <th className="py-3 px-4 text-left">Employee</th>
-                  <th className="py-3 px-4 text-left">Financial Year</th>
-                  <th className="py-3 px-4 text-center">GM2 Target</th>
-                  <th className="py-3 px-4 text-center">Status</th>
-                  <th className="py-3 px-4 text-left">Created By</th>
-                  <th className="py-3 px-4 text-left">Updated</th>
-                  <th className="py-3 px-4 text-center">Actions</th>
+                  <th className="py-3 px-4 text-left font-medium">Employee</th>
+                  <th className="py-3 px-4 text-left font-medium">Financial year</th>
+                  <th className="py-3 px-4 text-right font-medium">GM2 target</th>
+                  <th className="py-3 px-4 text-left font-medium">Status</th>
+                  <th className="py-3 px-4 text-left font-medium">Created by</th>
+                  <th className="py-3 px-4 text-left font-medium">Updated</th>
+                  <th className="py-3 px-4 text-right font-medium">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300 font-medium">
-                {filtered.map((r, idx) => {
-                  const statusCfg = STATUS_CONFIG[r.status || 'DRAFT'];
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+                {filtered.map((r) => {
+                  const status = STATUS_TONE[r.status || 'DRAFT'];
                   const isActing = actionLoading[r.id!];
                   const isPdfDl = pdfLoading === r.id;
+                  const isLocked = r.status === 'LOCKED';
                   return (
                     <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                      <td className="py-3 px-4 text-slate-400">{idx + 1}</td>
-                      <td className="py-3 px-4">
-                        <div className="font-semibold text-slate-900 dark:text-white">{r.employeeName}</div>
-                      </td>
+                      <td className="py-3 px-4 font-medium text-slate-900 dark:text-white">{r.employeeName}</td>
                       <td className="py-3 px-4">{r.financialYear}</td>
-                      <td className="py-3 px-4 text-center">
-                        <span className="font-bold text-amber-700 dark:text-amber-400">₹{r.gm2TargetCr}</span>
+                      <td className="py-3 px-4 text-right tabular-nums font-medium text-slate-900 dark:text-white">₹{r.gm2TargetCr}</td>
+                      <td className="py-3 px-4">
+                        <StatusBadge status={status.label} tone={status.tone} size="sm" />
                       </td>
-                      <td className="py-3 px-4 text-center">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusCfg.cls}`}>
-                          {statusCfg.icon} {statusCfg.label}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-slate-500 dark:text-slate-400">{(r as any).createdByName || '—'}</td>
-                      <td className="py-3 px-4 text-slate-500 dark:text-slate-400">
-                        {(r as any).updatedAt ? new Date((r as any).updatedAt).toLocaleDateString('en-IN') : '—'}
+                      <td className="py-3 px-4 text-slate-500 dark:text-slate-400">{r.createdByName || '—'}</td>
+                      <td className="py-3 px-4 text-slate-500 dark:text-slate-400 tabular-nums">
+                        {r.updatedAt ? new Date(r.updatedAt).toLocaleDateString('en-IN') : '—'}
                       </td>
                       <td className="py-3 px-4">
-                        <div className="flex items-center justify-center gap-1.5 flex-wrap">
-                          {/* Edit (HR only, non-locked) */}
-                          {(isAdmin || isHR) && r.status !== 'LOCKED' && (
-                            <button
-                              title="Edit"
+                        <div className="flex items-center justify-end gap-1">
+                          {!isLocked && (
+                            <Button
+                              variant="ghost"
+                              icon={Pencil}
+                              aria-label={`Edit ${r.employeeName}`}
+                              title={r.status === 'FINAL' ? 'Edit (moves the report back to Draft)' : 'Edit'}
                               onClick={() => { setEditingReport(r); setIsModalOpen(true); }}
-                              className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
+                            />
                           )}
-
-                          {/* Finalize (HR, DRAFT only) */}
-                          {(isAdmin || isHR) && r.status === 'DRAFT' && (
-                            <button
+                          {r.status === 'DRAFT' && (
+                            <Button
+                              variant="ghost"
+                              icon={isActing === 'finalize' ? Loader2 : CheckCircle2}
+                              iconSpin={isActing === 'finalize'}
+                              disabled={!!isActing}
                               title="Mark as Final"
-                              disabled={!!isActing}
                               onClick={() => handleFinalize(r.id!)}
-                              className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors cursor-pointer disabled:opacity-50"
                             >
-                              {isActing === 'finalize' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                            </button>
+                              Finalize
+                            </Button>
                           )}
-
-                          {/* Lock (Admin only, non-locked) */}
-                          {isAdmin && r.status !== 'LOCKED' && (
-                            <button
-                              title="Lock Report"
+                          {isAdmin && r.status === 'FINAL' && (
+                            <Button
+                              variant="secondary"
+                              icon={isActing === 'lock' ? Loader2 : Lock}
+                              iconSpin={isActing === 'lock'}
                               disabled={!!isActing}
-                              onClick={() => handleLock(r.id!)}
-                              className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors cursor-pointer disabled:opacity-50"
+                              title="Lock and publish to the employee"
+                              onClick={() => setPendingConfirm({ kind: 'lock', report: r })}
                             >
-                              {isActing === 'lock' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
-                            </button>
+                              Lock
+                            </Button>
                           )}
-
-                          {/* Print */}
-                          <button
-                            title="Print Preview"
+                          <Button
+                            variant="ghost"
+                            icon={Printer}
+                            aria-label="Print preview"
+                            title="Print preview"
                             onClick={() => printChampsReport(toChampsData(r))}
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                          >
-                            <Printer className="w-3.5 h-3.5" />
-                          </button>
-
-                          {/* Download PDF */}
-                          <button
-                            title="Download PDF"
+                          />
+                          <Button
+                            variant="ghost"
+                            icon={isPdfDl ? Loader2 : Download}
+                            iconSpin={isPdfDl}
                             disabled={isPdfDl}
+                            aria-label="Download PDF"
+                            title="Download PDF"
                             onClick={() => handleDownloadPdf(r)}
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer disabled:opacity-50"
-                          >
-                            {isPdfDl ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-                          </button>
+                          />
+                          {isAdmin && !isLocked && (
+                            <Button
+                              variant="ghost"
+                              icon={isActing === 'delete' ? Loader2 : Trash2}
+                              iconSpin={isActing === 'delete'}
+                              disabled={!!isActing}
+                              aria-label={`Delete ${r.employeeName}'s report`}
+                              title="Delete"
+                              className="hover:text-rose-700 dark:hover:text-rose-400"
+                              onClick={() => setPendingConfirm({ kind: 'delete', report: r })}
+                            />
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -533,15 +474,58 @@ export const SalesChampsView: React.FC<Props> = ({ employees, departments }) => 
         )}
       </div>
 
-      {/* Modal */}
+      {/* Create / edit modal */}
       {isModalOpen && (
         <SalesChampsReportModal
           report={editingReport}
           employees={employees}
           departments={departments}
+          existingReports={reports}
           onSave={handleCreate}
           onClose={() => { setIsModalOpen(false); setEditingReport(null); }}
         />
+      )}
+
+      {/* Lock / delete confirmation */}
+      {pendingConfirm && (
+        <div className="fixed inset-0 z-[9995] flex items-center justify-center bg-slate-900/60 p-4 modal-backdrop-enter">
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="champs-confirm-title"
+            className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xl max-w-md w-full p-5 modal-card-enter"
+          >
+            <div className="flex items-start gap-3">
+              <AlertTriangle
+                className={cn('w-5 h-5 shrink-0 mt-0.5', pendingConfirm.kind === 'delete' ? 'text-rose-600' : 'text-amber-600')}
+                aria-hidden="true"
+              />
+              <div>
+                <h3 id="champs-confirm-title" className="text-sm font-semibold text-slate-900 dark:text-white">
+                  {pendingConfirm.kind === 'lock'
+                    ? `Lock ${pendingConfirm.report.employeeName}'s ${pendingConfirm.report.financialYear} scheme?`
+                    : `Delete ${pendingConfirm.report.employeeName}'s ${pendingConfirm.report.financialYear} report?`}
+                </h3>
+                <p className="mt-1.5 text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                  {pendingConfirm.kind === 'lock'
+                    ? 'The employee will be notified and can view and download it. A locked report can never be edited or deleted.'
+                    : 'This removes the report permanently. It cannot be undone.'}
+                </p>
+              </div>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button onClick={() => setPendingConfirm(null)} autoFocus>Cancel</Button>
+              <Button
+                variant="primary"
+                icon={pendingConfirm.kind === 'lock' ? Lock : Trash2}
+                className={pendingConfirm.kind === 'delete' ? 'bg-rose-600 hover:bg-rose-700' : undefined}
+                onClick={handleConfirmed}
+              >
+                {pendingConfirm.kind === 'lock' ? 'Lock report' : 'Delete report'}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

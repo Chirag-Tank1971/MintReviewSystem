@@ -74,7 +74,9 @@ export const ReturnReviewModal: React.FC<ReturnReviewModalProps> = ({
   const selectionRef = useRef<HTMLDivElement>(null);
   const reasonRef = useRef<HTMLTextAreaElement>(null);
 
-  const effectiveTarget: ReturnSendTarget = mode === 'HOD' ? 'MANAGER' : target;
+  // Direct-to-HOD reviews have a single scoring step (the HOD, in the manager slot), so returns always go there.
+  const singleScorer = mode === 'HOD' || Boolean(review.reportsDirectlyToHod);
+  const effectiveTarget: ReturnSendTarget = singleScorer ? 'MANAGER' : target;
   const isBoth = effectiveTarget === 'BOTH';
   const hodName = review.hodName || 'HOD';
   const recipientName =
@@ -314,8 +316,8 @@ export const ReturnReviewModal: React.FC<ReturnReviewModalProps> = ({
             </div>
           )}
 
-          {/* Target selector (HR only) */}
-          {mode === 'HR' && (
+          {/* Target selector (HR only, and only when there are separate Manager and HOD steps) */}
+          {mode === 'HR' && !singleScorer && (
             <div>
               <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1.5">Send back to</label>
               <div className="flex items-center gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">

@@ -21,6 +21,30 @@ async function logChampsAudit(req: AuthenticatedRequest, action: string, recordI
   );
 }
 
+const SLAB_FIELDS = ['amcTargetLacs', 'amcIncentiveLacs', 'gm2AchievementLacs', 'salesIncentiveLacs'] as const;
+
+/** Slabs must be a non-empty array of rows whose four amounts are finite, non-negative numbers. */
+export function cleanSlabs(slabs: unknown): { slabs?: Record<string, number>[]; error?: string } {
+  if (!Array.isArray(slabs) || slabs.length === 0) return { error: 'At least one slab row is required.' };
+  const out: Record<string, number>[] = [];
+  for (const row of slabs) {
+    const clean: Record<string, number> = {};
+    for (const f of SLAB_FIELDS) {
+      const n = Number((row as any)?.[f] ?? 0);
+      if (!Number.isFinite(n) || n < 0) return { error: `Slab value "${f}" must be a non-negative number.` };
+      clean[f] = n;
+    }
+    out.push(clean);
+  }
+  return { slabs: out };
+}
+
+/** One report per employee per financial year. */
+async function findDuplicate(col: any, employeeId: string, financialYear: string, excludeId?: string) {
+  const docs = await (await col.find({ employeeId, financialYear })).toArray();
+  return docs.find((d: any) => d.id !== excludeId);
+}
+
 // ──────────────────────────────────────────────
 // GET /api/sales-champs  — list all (HR/Admin)
 // ──────────────────────────────────────────────
@@ -114,26 +138,34 @@ salesChampsRouter.post(
     try {
       const col = getDbCollection('salesChampsReports');
       const {
-        employeeId, employeeName, financialYear, fyDateRange,
+        employeeId, financialYear, fyDateRange,
         publishedDate, gm2TargetCr, slabs, mintValue,
         incentiveSchemeName, rules, customRuleText,
       } = req.body;
 
-      if (!employeeId || !employeeName || !financialYear || !gm2TargetCr || !slabs) {
-        return res.status(400).json({ error: 'Missing required fields.' });
+      if (!employeeId || !financialYear || !String(gm2TargetCr || '').trim()) {
+        return res.status(400).json({ error: 'Employee, financial year and GM2 target are required.' });
       }
-      if (!Array.isArray(slabs) || slabs.length === 0) {
-        return res.status(400).json({ error: 'At least one slab row is required.' });
+      const slabCheck = cleanSlabs(slabs);
+      if (slabCheck.error) return res.status(400).json({ error: slabCheck.error });
+
+      // Name comes from the employee record, never from the client
+      const emp = await getDbCollection('employees').findOne({ id: employeeId });
+      if (!emp) return res.status(400).json({ error: 'Selected employee was not found.' });
+
+      const dup = await findDuplicate(col, employeeId, financialYear);
+      if (dup) {
+        return res.status(409).json({ error: `${emp.name} already has a Sales Champs report for ${financialYear}. Edit that one instead.` });
       }
 
       const now = new Date().toISOString();
       const doc = {
         id: randomUUID(),
-        employeeId, employeeName, financialYear,
+        employeeId, employeeName: emp.name, financialYear,
         fyDateRange: fyDateRange || '',
         publishedDate: publishedDate || '',
-        gm2TargetCr,
-        slabs,
+        gm2TargetCr: String(gm2TargetCr).trim(),
+        slabs: slabCheck.slabs,
         mintValue: mintValue || 'Strive for Excellence',
         incentiveSchemeName: incentiveSchemeName || '',
         rules: rules || {},
@@ -159,7 +191,7 @@ salesChampsRouter.post(
 );
 
 // ──────────────────────────────────────────────
-// PUT /api/sales-champs/:id  — update (HR, DRAFT only)
+// PUT /api/sales-champs/:id  — update (HR, not locked). Editing a FINAL report sends it back to DRAFT.
 // ──────────────────────────────────────────────
 salesChampsRouter.put(
   '/sales-champs/:id',
@@ -174,7 +206,7 @@ salesChampsRouter.put(
       }
 
       const {
-        employeeId, employeeName, financialYear, fyDateRange,
+        employeeId, financialYear, fyDateRange,
         publishedDate, gm2TargetCr, slabs, mintValue,
         incentiveSchemeName, rules, customRuleText,
       } = req.body;
@@ -182,13 +214,39 @@ salesChampsRouter.put(
       const updates: any = {
         updatedAt: new Date().toISOString(),
       };
-      if (employeeId !== undefined) updates.employeeId = employeeId;
-      if (employeeName !== undefined) updates.employeeName = employeeName;
+      if (employeeId !== undefined && employeeId !== existing.employeeId) {
+        const emp = await getDbCollection('employees').findOne({ id: employeeId });
+        if (!emp) return res.status(400).json({ error: 'Selected employee was not found.' });
+        updates.employeeId = employeeId;
+        updates.employeeName = emp.name;
+      }
       if (financialYear !== undefined) updates.financialYear = financialYear;
+      const dup = await findDuplicate(
+        col,
+        updates.employeeId || existing.employeeId,
+        updates.financialYear || existing.financialYear,
+        existing.id
+      );
+      if (dup) {
+        return res.status(409).json({ error: `This employee already has a Sales Champs report for ${updates.financialYear || existing.financialYear}.` });
+      }
       if (fyDateRange !== undefined) updates.fyDateRange = fyDateRange;
       if (publishedDate !== undefined) updates.publishedDate = publishedDate;
-      if (gm2TargetCr !== undefined) updates.gm2TargetCr = gm2TargetCr;
-      if (slabs !== undefined) updates.slabs = slabs;
+      if (gm2TargetCr !== undefined) {
+        if (!String(gm2TargetCr).trim()) return res.status(400).json({ error: 'GM2 target is required.' });
+        updates.gm2TargetCr = String(gm2TargetCr).trim();
+      }
+      if (slabs !== undefined) {
+        const slabCheck = cleanSlabs(slabs);
+        if (slabCheck.error) return res.status(400).json({ error: slabCheck.error });
+        updates.slabs = slabCheck.slabs;
+      }
+      // A finalized report that changes must be reviewed again before it can be locked
+      if (existing.status === 'FINAL') {
+        updates.status = 'DRAFT';
+        updates.reviewedById = null;
+        updates.reviewedByName = null;
+      }
       if (mintValue !== undefined) updates.mintValue = mintValue;
       if (incentiveSchemeName !== undefined) updates.incentiveSchemeName = incentiveSchemeName;
       if (rules !== undefined) updates.rules = rules;
@@ -216,8 +274,8 @@ salesChampsRouter.post(
       const col = getDbCollection('salesChampsReports');
       const existing = await col.findOne({ id: req.params.id });
       if (!existing) return res.status(404).json({ error: 'Report not found.' });
-      if (existing.status === 'LOCKED') {
-        return res.status(400).json({ error: 'Already locked.' });
+      if (existing.status !== 'DRAFT') {
+        return res.status(400).json({ error: `Only draft reports can be finalized (this one is ${existing.status}).` });
       }
       const now = new Date().toISOString();
       await col.updateOne(
@@ -245,6 +303,9 @@ salesChampsRouter.post(
       const existing = await col.findOne({ id: req.params.id });
       if (!existing) return res.status(404).json({ error: 'Report not found.' });
       if (existing.status === 'LOCKED') return res.status(400).json({ error: 'Already locked.' });
+      if (existing.status !== 'FINAL') {
+        return res.status(400).json({ error: 'Mark the report as Final before locking it.' });
+      }
 
       const now = new Date().toISOString();
       await col.updateOne(
@@ -253,6 +314,20 @@ salesChampsRouter.post(
       );
       const updated = await col.findOne({ id: req.params.id });
       await logChampsAudit(req, 'SALES_CHAMPS_LOCK', req.params.id, existing, updated);
+
+      // Tell the employee their scheme document is now available
+      await getDbCollection('notifications').insertOne({
+        id: `notif_champs_${existing.id}_locked`,
+        userId: existing.employeeId,
+        userRole: 'EMPLOYEE',
+        type: 'GENERAL',
+        title: `Your Sales Champs scheme for ${existing.financialYear} is ready`,
+        message: `Your MINT Champs incentive scheme for ${existing.financialYear} has been approved and locked. Open Sales Champs to view or download it.`,
+        isRead: false,
+        priority: 'MEDIUM',
+        metadata: { salesChampsReportId: existing.id, financialYear: existing.financialYear },
+        createdAt: now,
+      });
       res.json(updated);
     } catch (err: any) {
       res.status(500).json({ error: 'Failed to lock report.' });
@@ -261,7 +336,7 @@ salesChampsRouter.post(
 );
 
 // ──────────────────────────────────────────────
-// DELETE /api/sales-champs/:id  — Admin only, DRAFT only
+// DELETE /api/sales-champs/:id  — Admin only, any status except LOCKED
 // ──────────────────────────────────────────────
 salesChampsRouter.delete(
   '/sales-champs/:id',

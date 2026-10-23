@@ -5,6 +5,7 @@ import {
   RatingTierChart,
   TrendLineChart,
 } from './ReportCharts';
+import { CHART_COLORS } from '../../config/chartColors';
 
 interface ReportVisualSectionProps {
   activeReport: string;
@@ -33,10 +34,10 @@ export const ReportVisualSection: React.FC<ReportVisualSectionProps> = ({
     };
 
     const statusSegments = [
-      { id: 'completed', label: 'Completed', value: summary.completed || 0, color: '#10b981' },
-      { id: 'mgrPending', label: 'Manager Pending', value: summary.managerPending || 0, color: '#f59e0b' },
-      { id: 'hrPending', label: 'HR Pending', value: summary.hrPending || 0, color: '#a855f7' },
-      { id: 'returned', label: 'Returned', value: summary.returned || 0, color: '#f43f5e' },
+      { id: 'completed', label: 'Completed', value: summary.completed || 0, color: CHART_COLORS.success },
+      { id: 'mgrPending', label: 'Manager Pending', value: summary.managerPending || 0, color: CHART_COLORS.warning },
+      { id: 'hrPending', label: 'HR Pending', value: summary.hrPending || 0, color: CHART_COLORS.hr },
+      { id: 'returned', label: 'Returned', value: summary.returned || 0, color: CHART_COLORS.danger },
     ];
 
     // Compute department review counts from reportData
@@ -72,7 +73,7 @@ export const ReportVisualSection: React.FC<ReportVisualSectionProps> = ({
         label: name,
         value: stat.total,
         secondaryValue: `${stat.completed} completed`,
-        color: '#3b82f6',
+        color: CHART_COLORS.primary,
       }))
       .sort((a, b) => b.value - a.value);
 
@@ -111,9 +112,9 @@ export const ReportVisualSection: React.FC<ReportVisualSectionProps> = ({
   if (activeReport === 'pending-overdue') {
     const summary = data.summary || {};
     const bottleneckSegments = [
-      { id: 'mgr', label: 'With Manager', value: summary.managerPendingCount || 0, color: '#f59e0b' },
-      { id: 'hr', label: 'With HR Sign-off', value: summary.hrPendingCount || 0, color: '#a855f7' },
-      { id: 'overdue', label: 'Critical Overdue (>30d)', value: summary.criticalOverdueCount || 0, color: '#f43f5e' },
+      { id: 'mgr', label: 'With Manager', value: summary.managerPendingCount || 0, color: CHART_COLORS.warning },
+      { id: 'hr', label: 'With HR Sign-off', value: summary.hrPendingCount || 0, color: CHART_COLORS.hr },
+      { id: 'overdue', label: 'Critical Overdue (>30d)', value: summary.criticalOverdueCount || 0, color: CHART_COLORS.danger },
     ];
 
     // Compute aging by department
@@ -130,7 +131,7 @@ export const ReportVisualSection: React.FC<ReportVisualSectionProps> = ({
         id: name,
         label: name,
         value: count,
-        color: '#f59e0b',
+        color: CHART_COLORS.warning,
       }))
       .sort((a, b) => b.value - a.value);
 
@@ -176,7 +177,7 @@ export const ReportVisualSection: React.FC<ReportVisualSectionProps> = ({
           value: Number(row.averageScore) || 0,
           secondaryValue: `${row.completionRate}% completed`,
           maxValue: 5.0,
-          color: (row.averageScore || 0) >= 4.0 ? '#10b981' : (row.averageScore || 0) >= 3.0 ? '#3b82f6' : '#f59e0b',
+          color: (row.averageScore || 0) >= 4.0 ? CHART_COLORS.success : (row.averageScore || 0) >= 3.0 ? CHART_COLORS.primary : CHART_COLORS.warning,
         });
       });
     }
@@ -227,7 +228,7 @@ export const ReportVisualSection: React.FC<ReportVisualSectionProps> = ({
           value: row.completionRate || 0,
           secondaryValue: `${row.closedCount}/${row.totalAssigned} closed`,
           maxValue: 100,
-          color: (row.completionRate || 0) >= 80 ? '#10b981' : (row.completionRate || 0) >= 50 ? '#f59e0b' : '#f43f5e',
+          color: (row.completionRate || 0) >= 80 ? CHART_COLORS.success : (row.completionRate || 0) >= 50 ? CHART_COLORS.warning : CHART_COLORS.danger,
         });
       });
     }
@@ -235,10 +236,10 @@ export const ReportVisualSection: React.FC<ReportVisualSectionProps> = ({
     managerBars.sort((a, b) => b.value - a.value);
 
     const completionSegments = [
-      { id: 'closed', label: 'Closed & Finalized', value: totalClosed, color: '#10b981' },
-      { id: 'submitted', label: 'Submitted to HR', value: totalSubmitted, color: '#3b82f6' },
-      { id: 'overdue', label: 'Overdue Reviews', value: totalOverdue, color: '#f59e0b' },
-      { id: 'returned', label: 'Returned for Revision', value: totalReturned, color: '#f43f5e' },
+      { id: 'closed', label: 'Closed & Finalized', value: totalClosed, color: CHART_COLORS.success },
+      { id: 'submitted', label: 'Submitted to HR', value: totalSubmitted, color: CHART_COLORS.primary },
+      { id: 'overdue', label: 'Overdue Reviews', value: totalOverdue, color: CHART_COLORS.warning },
+      { id: 'returned', label: 'Returned for Revision', value: totalReturned, color: CHART_COLORS.danger },
     ];
 
     return (
@@ -284,10 +285,10 @@ export const ReportVisualSection: React.FC<ReportVisualSectionProps> = ({
     }
 
     const incrementSegments = [
-      { id: '0-5', label: '0% - 5% Increment', value: bracket0to5, color: '#6366f1' },
-      { id: '6-10', label: '6% - 10% Increment', value: bracket6to10, color: '#3b82f6' },
-      { id: '11-15', label: '11% - 15% Increment', value: bracket11to15, color: '#10b981' },
-      { id: 'above15', label: '> 15% Increment', value: bracketAbove15, color: '#f59e0b' },
+      { id: '0-5', label: '0% - 5% Increment', value: bracket0to5, color: CHART_COLORS.secondary },
+      { id: '6-10', label: '6% - 10% Increment', value: bracket6to10, color: CHART_COLORS.primary },
+      { id: '11-15', label: '11% - 15% Increment', value: bracket11to15, color: CHART_COLORS.success },
+      { id: 'above15', label: '> 15% Increment', value: bracketAbove15, color: CHART_COLORS.warning },
     ];
 
     const cycleItems = Array.from(cycleMap.entries())
@@ -295,7 +296,7 @@ export const ReportVisualSection: React.FC<ReportVisualSectionProps> = ({
         id: name,
         label: name,
         value: count,
-        color: '#3b82f6',
+        color: CHART_COLORS.primary,
       }))
       .sort((a, b) => a.label.localeCompare(b.label));
 
@@ -376,7 +377,7 @@ export const ReportVisualSection: React.FC<ReportVisualSectionProps> = ({
           value: Number(row.averageRating) || 0,
           secondaryValue: `${row.occurrencesCount} reviews`,
           maxValue: 5.0,
-          color: (row.averageRating || 0) >= 4.0 ? '#10b981' : (row.averageRating || 0) >= 3.0 ? '#3b82f6' : '#f59e0b',
+          color: (row.averageRating || 0) >= 4.0 ? CHART_COLORS.success : (row.averageRating || 0) >= 3.0 ? CHART_COLORS.primary : CHART_COLORS.warning,
         });
       });
     }

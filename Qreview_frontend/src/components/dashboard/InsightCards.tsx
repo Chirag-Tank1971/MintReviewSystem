@@ -11,6 +11,7 @@ import { api } from '../../services/api';
 import { toast } from '../../context/ToastContext';
 import { cn } from '../../utils/cn';
 import { Card, Navigate } from './DashboardKit';
+import { RATING_BAND_COLORS } from '../../config/chartColors';
 
 const timeAgo = (iso: string) => {
   const h = Math.floor((Date.now() - new Date(iso).getTime()) / 3_600_000);
@@ -151,12 +152,7 @@ export const ReviewersBehindCard: React.FC<{
 
 /* ------------------------------------------------------------------ Calibration health */
 
-const BAND_COLOR: Record<string, string> = {
-  OUTSTANDING: 'bg-emerald-500',
-  EXCEEDS_EXPECTATIONS: 'bg-indigo-500',
-  MEETS_EXPECTATIONS: 'bg-sky-500',
-  NEEDS_IMPROVEMENT: 'bg-amber-500',
-};
+const BAND_COLOR: Record<string, string> = RATING_BAND_COLORS;
 
 export const CalibrationCard: React.FC<{ calibration: DashboardCalibration; onNavigate: Navigate; className?: string }> = ({
   calibration: c,
@@ -188,7 +184,7 @@ export const CalibrationCard: React.FC<{ calibration: DashboardCalibration; onNa
                   </span>
                 </div>
                 <div className="relative h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                  <div className={cn('h-full rounded-full', BAND_COLOR[b.key])} style={{ width: `${b.percent}%` }} />
+                  <div className="h-full rounded-full" style={{ width: `${b.percent}%`, backgroundColor: BAND_COLOR[b.key] }} />
                   <div className="absolute top-0 h-full w-0.5 bg-slate-500/60" style={{ left: `${b.targetPercent}%` }} title={`Target ${b.targetPercent}%`} />
                 </div>
               </li>

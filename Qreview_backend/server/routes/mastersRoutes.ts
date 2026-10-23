@@ -867,7 +867,7 @@ mastersRouter.post('/employees', requireRoles('SUPER_ADMIN', 'HR'), async (req: 
       }
     } else {
       const inputManagerIds = Array.isArray(managerIds) && managerIds.length > 0
-        ? managerIds.filter(Boolean).slice(0, 2)
+        ? [...new Set<string>(managerIds.filter(Boolean))].slice(0, 2)
         : managerId ? [managerId] : [];
 
       if (inputManagerIds.length > 0) {
@@ -1463,7 +1463,8 @@ mastersRouter.put('/employees/:id', requireRoles('SUPER_ADMIN', 'HR'), async (re
       if (managerIds.includes(id)) {
         return res.status(400).json({ error: 'An employee cannot be their own manager.' });
       }
-      const cleanManagerIds = managerIds.filter(Boolean).slice(0, 2);
+      // Dedupe: the form can send the same person as primary and secondary
+      const cleanManagerIds = [...new Set<string>(managerIds.filter(Boolean))].slice(0, 2);
       if (cleanManagerIds.length === 0 && !isTargetHod && status !== 'INACTIVE' && emp.status !== 'INACTIVE') {
         return res.status(400).json({ error: 'Reporting Manager is required. Self-managed employees are not permitted.' });
       }

@@ -5,6 +5,7 @@ import {
   PieChart as PieChartIcon,
   BarChart2,
 } from 'lucide-react';
+import { CHART_COLORS, RATING_BAND_COLORS } from '../../config/chartColors';
 
 // =========================================================================
 // 1. Interactive Animated SVG Donut Chart
@@ -239,7 +240,7 @@ export const HorizontalBarChart: React.FC<{
         <div className="space-y-3 pt-2">
           {displayItems.map((item, idx) => {
             const widthPct = Math.min(100, Math.max(8, (item.value / (item.maxValue || highestValue)) * 100));
-            const barColor = item.color || '#3b82f6';
+            const barColor = item.color || CHART_COLORS.primary;
 
             return (
               <div
@@ -319,7 +320,7 @@ export const RatingTierChart: React.FC<RatingDistributionProps> = ({
       shortLabel: 'Outstanding',
       range: '4.5 - 5.0',
       count: outstanding,
-      color: '#10b981', // emerald
+      color: RATING_BAND_COLORS.OUTSTANDING,
       badgeClass: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
     },
     {
@@ -328,8 +329,8 @@ export const RatingTierChart: React.FC<RatingDistributionProps> = ({
       shortLabel: 'Exceeds',
       range: '3.8 - 4.49',
       count: exceeds,
-      color: '#3b82f6', // blue
-      badgeClass: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
+      color: RATING_BAND_COLORS.EXCEEDS_EXPECTATIONS,
+      badgeClass: 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800',
     },
     {
       id: 'meets',
@@ -337,8 +338,8 @@ export const RatingTierChart: React.FC<RatingDistributionProps> = ({
       shortLabel: 'Meets',
       range: '2.8 - 3.79',
       count: meets,
-      color: '#6366f1', // indigo
-      badgeClass: 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800',
+      color: RATING_BAND_COLORS.MEETS_EXPECTATIONS,
+      badgeClass: 'bg-sky-50 dark:bg-sky-950/40 text-sky-800 dark:text-sky-300 border-sky-200 dark:border-sky-800',
     },
     {
       id: 'needsImp',
@@ -346,7 +347,7 @@ export const RatingTierChart: React.FC<RatingDistributionProps> = ({
       shortLabel: 'Needs Imp.',
       range: '< 2.8',
       count: needsImprovement,
-      color: '#f59e0b', // amber
+      color: RATING_BAND_COLORS.NEEDS_IMPROVEMENT,
       badgeClass: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
     },
   ];
@@ -518,8 +519,8 @@ export const TrendLineChart: React.FC<{
         <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto overflow-visible">
           <defs>
             <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.35" />
-              <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.0" />
+              <stop offset="0%" stopColor={CHART_COLORS.primary} stopOpacity="0.35" />
+              <stop offset="100%" stopColor={CHART_COLORS.primary} stopOpacity="0.0" />
             </linearGradient>
           </defs>
 
@@ -566,7 +567,7 @@ export const TrendLineChart: React.FC<{
             <path
               d={pathD}
               fill="none"
-              stroke="#3b82f6"
+              stroke={CHART_COLORS.primary}
               strokeWidth="2.5"
               strokeLinecap="round"
               strokeDasharray={1000}
@@ -594,7 +595,7 @@ export const TrendLineChart: React.FC<{
                   cx={c.x}
                   cy={c.y}
                   r={isHovered ? 6 : 4}
-                  fill={isHovered ? '#2563eb' : '#3b82f6'}
+                  fill={isHovered ? CHART_COLORS.primaryHover : CHART_COLORS.primary}
                   stroke="#ffffff"
                   strokeWidth="2"
                   className={`transition-all duration-300 drop-shadow-sm ${

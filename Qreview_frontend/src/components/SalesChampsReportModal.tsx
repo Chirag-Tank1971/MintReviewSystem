@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  X, ChevronRight, ChevronLeft, User, Target, FileText,
-  Eye, Printer, Download, Loader2, CheckCircle2, Save,
+  X, ChevronRight, ChevronLeft, AlertTriangle,
+  Printer, Download, Loader2, CheckCircle2, Save,
 } from 'lucide-react';
 import { Employee, Department } from '../types';
-import { ChampsReportData, ChampsSlab, DEFAULT_CHAMPS_RULES, ChampsRules, printChampsReport, downloadChampsPdf } from '../utils/salesChampsExport';
+import { ChampsReportData, ChampsSlab, DEFAULT_CHAMPS_RULES, ChampsRules, printChampsReport, downloadChampsPdf, financialYearFor } from '../utils/salesChampsExport';
 import { useModalAnimation } from '../hooks/useModalAnimation';
+import { Button } from './ui/Button';
 
 export interface SalesChampsReport {
   id?: string;
@@ -22,12 +23,16 @@ export interface SalesChampsReport {
   rules: Partial<ChampsRules>;
   customRuleText: string;
   status?: 'DRAFT' | 'FINAL' | 'LOCKED';
+  createdByName?: string;
+  updatedAt?: string;
 }
 
 interface Props {
   report?: SalesChampsReport | null;
   employees: Employee[];
   departments?: Department[];
+  /** All existing reports, so an employee who already has one for the chosen year can't be picked. */
+  existingReports?: SalesChampsReport[];
   onSave: (data: Omit<SalesChampsReport, 'id' | 'status'>) => Promise<void>;
   onClose: () => void;
 }
@@ -36,7 +41,7 @@ const EMPTY_SLAB: ChampsSlab = { amcTargetLacs: 0, amcIncentiveLacs: 0, gm2Achie
 
 const STEP_LABELS = ['Employee & Target', 'Incentive Slabs', 'Terms & Conditions', 'Preview'];
 
-export const SalesChampsReportModal: React.FC<Props> = ({ report, employees, departments, onSave, onClose }) => {
+export const SalesChampsReportModal: React.FC<Props> = ({ report, employees, departments, existingReports = [], onSave, onClose }) => {
   const { isMounted, handleClose, backdropClass, cardClass } = useModalAnimation({ onClose });
 
   const [step, setStep] = useState(0);
@@ -46,9 +51,10 @@ export const SalesChampsReportModal: React.FC<Props> = ({ report, employees, dep
   // ── Step 1: Employee + FY + Target
   const [employeeId, setEmployeeId] = useState(report?.employeeId || '');
   const [onlySalesAndService, setOnlySalesAndService] = useState(true);
-  const [financialYear, setFinancialYear] = useState(report?.financialYear || 'FY 2026-27');
-  const [fyDateRange, setFyDateRange] = useState(report?.fyDateRange || '01.04.2026 – 31.03.2027');
-  const [publishedDate, setPublishedDate] = useState(report?.publishedDate || '1st April 2026');
+  const currentFy = financialYearFor();
+  const [financialYear, setFinancialYear] = useState(report?.financialYear || currentFy.label);
+  const [fyDateRange, setFyDateRange] = useState(report?.fyDateRange || currentFy.range);
+  const [publishedDate, setPublishedDate] = useState(report?.publishedDate || currentFy.published);
 
   // Parse initial target number and unit (Cr / Lacs)
   const parseInitialTarget = (raw: string | undefined) => {
@@ -117,6 +123,14 @@ export const SalesChampsReportModal: React.FC<Props> = ({ report, employees, dep
     return isSalesOrService(emp);
   });
 
+  // One report per employee per financial year (the backend enforces this too)
+  const normFy = (fy: string) => fy.trim().toLowerCase();
+  const existingReportFor = (empId: string) =>
+    existingReports.find(
+      (r) => r.employeeId === empId && normFy(r.financialYear) === normFy(financialYear) && r.id !== report?.id
+    );
+  const conflict = employeeId ? existingReportFor(employeeId) : undefined;
+
   const selectedEmployee = employees.find((e) => e.id === employeeId);
   const employeeName = selectedEmployee
     ? selectedEmployee.name
@@ -134,6 +148,14 @@ export const SalesChampsReportModal: React.FC<Props> = ({ report, employees, dep
     rules,
     customRuleText,
   };
+
+  // Unsaved-changes guard: compare the form against how it looked when it opened
+  const formSnapshot = JSON.stringify({ employeeId, ...champsData });
+  const initialSnapshot = useRef(formSnapshot);
+  const isDirty = formSnapshot !== initialSnapshot.current;
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const canSaveDraft = !!employeeId && !!financialYear && !!gm2TargetCr && !conflict;
+  const requestClose = () => (isDirty ? setShowCloseConfirm(true) : handleClose());
 
   useEffect(() => {
     if (!isMounted) return;
@@ -156,7 +178,7 @@ export const SalesChampsReportModal: React.FC<Props> = ({ report, employees, dep
   };
 
   const canProceed = () => {
-    if (step === 0) return !!employeeId && !!financialYear && !!gm2TargetCr;
+    if (step === 0) return !!employeeId && !!financialYear && !!gm2TargetCr && !conflict;
     if (step === 1) return slabs.some((s) => s.gm2AchievementLacs > 0);
     return true;
   };
@@ -220,7 +242,7 @@ export const SalesChampsReportModal: React.FC<Props> = ({ report, employees, dep
             </h2>
             <p className="text-xs text-blue-200 mt-0.5">Sales incentive scheme document</p>
           </div>
-          <button onClick={handleClose} className="p-1.5 rounded-lg text-blue-200 hover:text-white hover:bg-white/10 transition-colors cursor-pointer">
+          <button onClick={requestClose} aria-label="Close" className="p-1.5 rounded-lg text-blue-200 hover:text-white hover:bg-white/10 transition-colors cursor-pointer">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -286,9 +308,11 @@ export const SalesChampsReportModal: React.FC<Props> = ({ report, employees, dep
                       const dept = emp.departmentName || departments?.find((d) => d.id === emp.departmentId)?.name || '';
                       const desig = emp.designationName || '';
                       const tag = [dept, desig].filter(Boolean).join(' • ');
+                      const taken = existingReportFor(emp.id);
                       return (
                         <option key={emp.id} value={emp.id}>
                           {emp.name} ({emp.employeeCode}){tag ? ` — ${tag}` : ''}
+                          {taken ? ` — already has a ${taken.financialYear} report (${(taken.status || 'DRAFT').toLowerCase()})` : ''}
                         </option>
                       );
                     })}
@@ -319,7 +343,21 @@ export const SalesChampsReportModal: React.FC<Props> = ({ report, employees, dep
                     )}
                   </div>
 
-                  {selectedEmployee && (
+                  {conflict && (
+                    <div role="alert" className="mt-2 flex items-start gap-2 text-xs text-rose-800 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 px-3 py-2.5 rounded-lg">
+                      <AlertTriangle className="w-4 h-4 shrink-0 mt-px text-rose-600 dark:text-rose-400" aria-hidden="true" />
+                      <div>
+                        <p className="font-semibold">
+                          {selectedEmployee?.name || 'This employee'} already has a {conflict.financialYear} report ({(conflict.status || 'DRAFT').toLowerCase()}).
+                        </p>
+                        <p className="mt-0.5 text-rose-700 dark:text-rose-400">
+                          A new report can't be created for the same year. Choose another employee or financial year, or edit the existing report from the list.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedEmployee && !conflict && (
                     <div className="mt-2 flex flex-wrap items-center gap-2 text-xs bg-indigo-50/70 dark:bg-indigo-950/30 text-indigo-900 dark:text-indigo-200 px-3 py-2 rounded-lg border border-indigo-200/60 dark:border-indigo-800/40">
                       <span className="font-semibold">{selectedEmployee.name}</span>
                       <span className="text-indigo-300 dark:text-indigo-700">•</span>
@@ -560,7 +598,7 @@ export const SalesChampsReportModal: React.FC<Props> = ({ report, employees, dep
         {/* Footer actions */}
         <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/50">
           <button
-            onClick={() => step > 0 ? setStep(step - 1) : handleClose()}
+            onClick={() => step > 0 ? setStep(step - 1) : requestClose()}
             className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold transition-colors cursor-pointer"
           >
             <ChevronLeft className="w-3.5 h-3.5" />
@@ -568,6 +606,18 @@ export const SalesChampsReportModal: React.FC<Props> = ({ report, employees, dep
           </button>
 
           <div className="flex items-center gap-2">
+            {/* Save part-way and finish later: needs only the step-1 essentials (employee, year, target) */}
+            {step < STEP_LABELS.length - 1 && (!report?.status || report.status === 'DRAFT') && (
+              <button
+                onClick={handleSave}
+                disabled={isSaving || !employeeId || !financialYear || !gm2TargetCr}
+                title={!employeeId || !financialYear || !gm2TargetCr ? 'Pick the employee, financial year and GM2 target first' : undefined}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-750 text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                Save as draft
+              </button>
+            )}
             {step < STEP_LABELS.length - 1 ? (
               <button
                 onClick={() => setStep(step + 1)}
@@ -588,6 +638,55 @@ export const SalesChampsReportModal: React.FC<Props> = ({ report, employees, dep
             )}
           </div>
         </div>
+
+        {/* Unsaved changes prompt (close / cancel with edits) */}
+        {showCloseConfirm && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-900/50 rounded-2xl p-4 modal-backdrop-enter">
+            <div
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="champs-close-title"
+              className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xl max-w-md w-full p-5 modal-card-enter"
+            >
+              <h3 id="champs-close-title" className="text-sm font-semibold text-slate-900 dark:text-white">
+                Save your changes before closing?
+              </h3>
+              <p className="mt-1.5 text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                {canSaveDraft
+                  ? report?.status === 'FINAL'
+                    ? 'Saving moves this report back to Draft so it can be reviewed again.'
+                    : 'Save it as a draft and finish it later, or discard what you entered.'
+                  : 'To save a draft, pick the employee, financial year and GM2 target first.'}
+              </p>
+              {/* Discard sits apart on the left so it isn't hit by accident; the safe choices group on the right */}
+              <div className="mt-5 flex flex-wrap items-center gap-2 [&_button]:whitespace-nowrap">
+                <Button
+                  variant="ghost"
+                  size="md"
+                  onClick={() => { setShowCloseConfirm(false); handleClose(); }}
+                  className="text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-800"
+                >
+                  Discard
+                </Button>
+                <div className="ml-auto flex items-center gap-2">
+                  <Button size="md" onClick={() => setShowCloseConfirm(false)} autoFocus>
+                    Keep editing
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="md"
+                    icon={isSaving ? Loader2 : Save}
+                    iconSpin={isSaving}
+                    disabled={!canSaveDraft || isSaving}
+                    onClick={() => { setShowCloseConfirm(false); handleSave().catch(() => {}); }}
+                  >
+                    Save draft &amp; close
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>,
     document.body

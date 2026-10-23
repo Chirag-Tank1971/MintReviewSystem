@@ -124,3 +124,10 @@ storage/
 *.bak
 *.backup
 *.old
+
+# =========================
+# AI agent tooling (local per developer)
+# =========================
+.agents/
+.claude/
+skills-lock.json
