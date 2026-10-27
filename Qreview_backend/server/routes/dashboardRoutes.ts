@@ -999,11 +999,12 @@ async function buildHrOverview(
   const activeEmployees = allEmployees.filter((e) => e.status === 'ACTIVE');
   const periodId = activePeriod?.id;
 
-  const [currentReviews, allAppraisals]: [EmployeeReview[], Appraisal[]] = await Promise.all([
+  // Only the unlocked-appraisal count is needed, so count in the database instead of loading them all
+  const [currentReviews, pendingAppraisals]: [EmployeeReview[], number] = await Promise.all([
     periodId
       ? (await reviewsCol.find({ reviewPeriodId: periodId })).toArray()
       : (await reviewsCol.find({})).toArray(),
-    (await appraisalsCol.find({})).toArray(),
+    appraisalsCol.countDocuments({ isLocked: { $ne: true } }),
   ]);
 
   const reviewsCompleted = currentReviews.filter((r) => isClosed(r)).length;
@@ -1012,8 +1013,6 @@ async function buildHrOverview(
   const reviewsPendingManager = currentReviews.filter((r) => MANAGER_OPEN_STATUSES.includes(r.status)).length;
   const reviewsTotal = currentReviews.length;
   const completionRate = reviewsTotal > 0 ? Math.round((reviewsCompleted / reviewsTotal) * 100) : 0;
-
-  const pendingAppraisals = allAppraisals.filter((a) => !a.isLocked).length;
 
   // Employees without their own KRA scorecard (same rule as review generation)
   const hasScorecard = hasScorecardCheck(allTemplates);
@@ -1024,17 +1023,21 @@ async function buildHrOverview(
     ? Math.round((kraCoverageCount / activeEmployees.length) * 100)
     : 0;
 
-  // Department progress
+  // Department progress (single passes with maps; the old per-row lookups were O(n²))
   const deptEmployees = new Map<string, number>();
+  const deptWithKra = new Map<string, number>();
+  const deptOfEmployee = new Map<string, string | undefined>();
   for (const emp of activeEmployees) {
+    deptOfEmployee.set(emp.id, emp.departmentId);
     if (emp.departmentId) {
       deptEmployees.set(emp.departmentId, (deptEmployees.get(emp.departmentId) || 0) + 1);
+      if (hasScorecard(emp)) deptWithKra.set(emp.departmentId, (deptWithKra.get(emp.departmentId) || 0) + 1);
     }
   }
 
   const deptReviews = new Map<string, { initiated: number; completed: number }>();
   for (const rev of currentReviews) {
-    const deptId = rev.departmentId || activeEmployees.find((e) => e.id === rev.employeeId)?.departmentId;
+    const deptId = rev.departmentId || deptOfEmployee.get(rev.employeeId);
     if (deptId) {
       const cur = deptReviews.get(deptId) || { initiated: 0, completed: 0 };
       cur.initiated += 1;
@@ -1048,7 +1051,7 @@ async function buildHrOverview(
       const stats = deptReviews.get(d.id) || { initiated: 0, completed: 0 };
       const totalEmps = deptEmployees.get(d.id) || 0;
       const rate = stats.initiated > 0 ? Math.round((stats.completed / stats.initiated) * 100) : 0;
-      const deptsEmpsWithKra = activeEmployees.filter((e) => e.departmentId === d.id && hasScorecard(e)).length;
+      const deptsEmpsWithKra = deptWithKra.get(d.id) || 0;
       const kraRate = totalEmps > 0 ? Math.round((deptsEmpsWithKra / totalEmps) * 100) : 0;
       const pending = stats.initiated - stats.completed;
       let status: 'Completed' | 'In Progress' | 'Not Started' = 'Not Started';
@@ -1260,9 +1263,12 @@ async function buildAdminOverview(
   }
 
   if (activePeriod) {
-    const periodReviews = await (await reviewsCol.find({ reviewPeriodId: activePeriod.id })).toArray();
+    const periodReviews = await (
+      await reviewsCol.find({ reviewPeriodId: activePeriod.id }, { projection: { employeeId: 1, status: 1 } })
+    ).toArray();
+    const activeById = new Map(activeEmps.map((e) => [e.id, e]));
     for (const review of periodReviews) {
-      const emp = activeEmps.find((e) => e.id === (review as any).employeeId);
+      const emp = activeById.get((review as any).employeeId);
       if (!emp) continue;
       const deptId = (emp as any).departmentId;
       if (!deptId) continue;
@@ -1491,7 +1497,12 @@ dashboardRouter.get('/dashboard/summary', async (req: AuthenticatedRequest, res:
             buildHodOverview(
               myEmployeeId,
               periodMap,
-              isHrOrAdmin ? allEmployees : await (await getDbCollection('employees').find({})).toArray()
+              // The HOD overview only needs the HOD and their department, not every employee
+              isHrOrAdmin
+                ? allEmployees
+                : me?.departmentId
+                ? await (await getDbCollection('employees').find({ $or: [{ id: myEmployeeId }, { departmentId: me.departmentId }] })).toArray()
+                : me ? [me] : []
             ))()
         : Promise.resolve(null),
       isAdmin ? buildAdminOverview(allEmployees, allDepartments, cycles, allTemplates, periods, now) : Promise.resolve(null),
@@ -1511,6 +1522,7 @@ dashboardRouter.get('/dashboard/summary', async (req: AuthenticatedRequest, res:
     res.json(summary);
   } catch (error: any) {
     console.error('Error building dashboard summary:', error);
-    res.status(500).json({ error: 'Failed to load dashboard.', message: error.message, stack: error.stack });
+    // Details stay in the server log; never send stack traces to the browser
+    res.status(500).json({ error: 'Failed to load dashboard.' });
   }
 });

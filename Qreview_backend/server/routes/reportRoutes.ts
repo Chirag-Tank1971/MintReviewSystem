@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { getDbCollection } from '../db.js';
 import { AuthenticatedRequest, authenticateToken, requireRoles } from '../auth.js';
+import { isSet } from '../queryHelpers.js';
 import {
   Employee,
   Department,
@@ -23,63 +24,50 @@ reportRouter.use('/reports', requireRoles('SUPER_ADMIN', 'HR', 'HOD', 'MANAGER',
  * - HOD: Filtered strictly to department members
  * - REPORTING_MANAGER / MANAGER: Filtered strictly to direct reports
  */
-async function getScopedReportData(req: AuthenticatedRequest) {
+// Large per-review fields that most reports never read
+const REVIEW_DETAIL_FIELDS = { kraSnapshot: 0, actionHistory: 0, returnRequests: 0, managerSubmissions: 0 };
+
+async function getScopedReportData(req: AuthenticatedRequest, opts: { withDetails?: boolean } = {}) {
   const user = req.user!;
   const employeesCol = getDbCollection('employees');
   const reviewsCol = getDbCollection('employeeReviews');
 
-  const allEmployees: Employee[] = await (await employeesCol.find({})).toArray();
-  const allReviews: EmployeeReview[] = await (await reviewsCol.find({})).toArray();
+  // Scope is applied in the query, so a manager's report reads their team, not the whole company
+  const findEmployees = async (q: Record<string, any>): Promise<Employee[]> => (await employeesCol.find(q)).toArray();
+  const findReviews = async (q: Record<string, any>): Promise<EmployeeReview[]> =>
+    (await reviewsCol.find(q, opts.withDetails ? undefined : { projection: REVIEW_DETAIL_FIELDS })).toArray();
 
   const isSuperOrHrOrMgmt =
     user.role === 'SUPER_ADMIN' || user.role === 'HR' || user.role === 'MANAGEMENT';
 
   if (isSuperOrHrOrMgmt) {
-    return { employees: allEmployees, reviews: allReviews };
+    const [employees, reviews] = await Promise.all([findEmployees({}), findReviews({})]);
+    return { employees, reviews };
   }
 
   if (user.role === 'HOD') {
     const hodDeptId = req.employeeProfile?.departmentId;
     const hodEmpId = user.employeeId || user.id;
-
-    const filteredEmployees = allEmployees.filter((e) => {
-      const isSelf = e.id === hodEmpId;
-      const isDeptMatch = Boolean(hodDeptId && e.departmentId === hodDeptId);
-      return isSelf || isDeptMatch;
+    const employees = await findEmployees({ $or: [{ id: hodEmpId }, ...(hodDeptId ? [{ departmentId: hodDeptId }] : [])] });
+    const reviews = await findReviews({
+      $or: [...(hodDeptId ? [{ departmentId: hodDeptId }] : []), { employeeId: { $in: employees.map((e) => e.id) } }],
     });
-
-    const empIds = new Set(filteredEmployees.map((e) => e.id));
-    const filteredReviews = allReviews.filter((r) => {
-      const isDeptMatch = Boolean(hodDeptId && r.departmentId === hodDeptId);
-      return isDeptMatch || empIds.has(r.employeeId);
-    });
-
-    return { employees: filteredEmployees, reviews: filteredReviews };
+    return { employees, reviews };
   }
 
   if (user.role === 'MANAGER' || user.role === 'REPORTING_MANAGER') {
     const managerEmpId = user.employeeId || user.id;
-
-    const filteredEmployees = allEmployees.filter((e) => {
-      const isSelf = e.id === managerEmpId;
-      const isDirectReport = Boolean(managerEmpId && e.managerId === managerEmpId);
-      return isSelf || isDirectReport;
+    const employees = await findEmployees({ $or: [{ id: managerEmpId }, { managerId: managerEmpId }] });
+    const reviews = await findReviews({
+      $or: [{ managerId: managerEmpId }, { employeeId: { $in: employees.map((e) => e.id) } }],
     });
-
-    const empIds = new Set(filteredEmployees.map((e) => e.id));
-    const filteredReviews = allReviews.filter((r) => {
-      const isDirectReport = Boolean(managerEmpId && r.managerId === managerEmpId);
-      return isDirectReport || empIds.has(r.employeeId);
-    });
-
-    return { employees: filteredEmployees, reviews: filteredReviews };
+    return { employees, reviews };
   }
 
   // Fallback for employee or any other role: own records only
   const empId = user.employeeId || user.id;
-  const filteredEmployees = allEmployees.filter((e) => e.id === empId);
-  const filteredReviews = allReviews.filter((r) => r.employeeId === empId);
-  return { employees: filteredEmployees, reviews: filteredReviews };
+  const [employees, reviews] = await Promise.all([findEmployees({ id: empId }), findReviews({ employeeId: empId })]);
+  return { employees, reviews };
 }
 
 /**
@@ -88,7 +76,7 @@ async function getScopedReportData(req: AuthenticatedRequest) {
 reportRouter.get('/reports/quarterly-status', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { periodId, departmentId, cycleId, status } = req.query;
-    const { employees, reviews: scopedReviews } = await getScopedReportData(req);
+    const { employees, reviews: scopedReviews } = await getScopedReportData(req, { withDetails: true });
     let reviews = scopedReviews;
     const empMap = new Map(employees.map((e) => [e.id, e]));
 
@@ -233,10 +221,22 @@ reportRouter.get('/reports/employee-history', async (req: AuthenticatedRequest, 
 
     const { employees: scopedEmployees, reviews } = await getScopedReportData(req);
     let employees = scopedEmployees.filter((e) => e.status === 'ACTIVE');
-    const appraisals: Appraisal[] = await (await appraisalsCol.find({})).toArray();
+    // Only the appraisals of employees in this report
+    const appraisals: Appraisal[] = await (
+      await appraisalsCol.find({ employeeId: { $in: employees.map((e) => e.id) } })
+    ).toArray();
     const periods: ReviewPeriod[] = await (await periodsCol.find({})).toArray();
 
     const periodMap = new Map(periods.map((p) => [p.id, p]));
+    // Group once instead of scanning every review/appraisal per employee (was O(employees × reviews))
+    const reviewsByEmployee = new Map<string, EmployeeReview[]>();
+    for (const r of reviews) {
+      const list = reviewsByEmployee.get(r.employeeId);
+      if (list) list.push(r);
+      else reviewsByEmployee.set(r.employeeId, [r]);
+    }
+    const firstAppraisalByEmployee = new Map<string, Appraisal>();
+    for (const a of appraisals) if (!firstAppraisalByEmployee.has(a.employeeId)) firstAppraisalByEmployee.set(a.employeeId, a);
 
     if (departmentId && departmentId !== 'ALL') {
       employees = employees.filter((e) => e.departmentId === departmentId);
@@ -252,7 +252,7 @@ reportRouter.get('/reports/employee-history', async (req: AuthenticatedRequest, 
     }
 
     const reportData = employees.map((emp) => {
-      const empReviews = reviews.filter((r) => r.employeeId === emp.id);
+      const empReviews = reviewsByEmployee.get(emp.id) || [];
 
       const q1 = empReviews.find((r) => {
         const p = periodMap.get(r.reviewPeriodId);
@@ -277,7 +277,7 @@ reportRouter.get('/reports/employee-history', async (req: AuthenticatedRequest, 
           ? Number((scoredReviews.reduce((acc, r) => acc + (r.finalScore || 0), 0) / scoredReviews.length).toFixed(2))
           : 0;
 
-      const latestAppraisal = appraisals.find((a) => a.employeeId === emp.id);
+      const latestAppraisal = firstAppraisalByEmployee.get(emp.id);
 
       return {
         employeeId: emp.id,
@@ -474,7 +474,6 @@ reportRouter.get('/reports/appraisal-due', async (req: AuthenticatedRequest, res
 
     const { employees: scopedEmployees, reviews } = await getScopedReportData(req);
     const cycles: Cycle[] = await (await cyclesCol.find({})).toArray();
-    const appraisals: Appraisal[] = await (await appraisalsCol.find({})).toArray();
 
     const targetYear = year ? parseInt(year as string, 10) : 2026;
     const cycleMap = new Map(cycles.map((c) => [c.id, c]));
@@ -482,6 +481,19 @@ reportRouter.get('/reports/appraisal-due', async (req: AuthenticatedRequest, res
     let eligibleEmployees = scopedEmployees.filter((e) => e.status === 'ACTIVE');
     if (cycleId && cycleId !== 'ALL') {
       eligibleEmployees = eligibleEmployees.filter((e) => e.cycleId === cycleId || e.cycleCode === cycleId);
+    }
+
+    // Only this year's appraisals for these employees, then index both lists by employee
+    const appraisals: Appraisal[] = await (
+      await appraisalsCol.find({ appraisalYear: targetYear, employeeId: { $in: eligibleEmployees.map((e) => e.id) } })
+    ).toArray();
+    const appraisalByEmployee = new Map<string, Appraisal>();
+    for (const a of appraisals) if (!appraisalByEmployee.has(a.employeeId)) appraisalByEmployee.set(a.employeeId, a);
+    const reviewsByEmployee = new Map<string, EmployeeReview[]>();
+    for (const r of reviews) {
+      const list = reviewsByEmployee.get(r.employeeId);
+      if (list) list.push(r);
+      else reviewsByEmployee.set(r.employeeId, [r]);
     }
 
     const monthNames = [
@@ -502,8 +514,8 @@ reportRouter.get('/reports/appraisal-due', async (req: AuthenticatedRequest, res
 
     const reportData = eligibleEmployees.map((emp) => {
       const cycle = cycleMap.get(emp.cycleId || '') || cycles.find((c) => c.code === emp.cycleCode);
-      const empAppraisal = appraisals.find((a) => a.employeeId === emp.id && a.appraisalYear === targetYear);
-      const empReviews = reviews.filter((r) => r.employeeId === emp.id);
+      const empAppraisal = appraisalByEmployee.get(emp.id);
+      const empReviews = reviewsByEmployee.get(emp.id) || [];
 
       const scored = empReviews.filter((r) => r.finalScore && r.finalScore > 0);
       const avgScore =
@@ -620,7 +632,7 @@ reportRouter.get('/reports/rating-trend', async (req: AuthenticatedRequest, res:
  */
 reportRouter.get('/reports/kra-performance', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { reviews } = await getScopedReportData(req);
+    const { reviews } = await getScopedReportData(req, { withDetails: true });
 
     const kraMap = new Map<string, { totalWeight: number; ratings: number[]; occurrences: number }>();
 
@@ -683,7 +695,7 @@ reportRouter.get('/reports/kra-performance', async (req: AuthenticatedRequest, r
 reportRouter.get('/reports/return-analytics', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { periodId } = req.query;
-    const { reviews: scoped } = await getScopedReportData(req);
+    const { reviews: scoped } = await getScopedReportData(req, { withDetails: true });
     const reviews = periodId && periodId !== 'ALL' ? scoped.filter((r) => r.reviewPeriodId === periodId) : scoped;
     const now = Date.now();
     const HOUR = 60 * 60 * 1000;
@@ -857,16 +869,14 @@ reportRouter.get(
     try {
       const { module, limit } = req.query;
       const auditCol = getDbCollection('auditLogs');
-      let logs: AuditLog[] = await (await auditCol.find({})).toArray();
-
-      if (module && module !== 'ALL') {
-        logs = logs.filter((l) => l.module === module);
-      }
-
-      logs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-      const maxItems = limit ? parseInt(limit as string, 10) : 200;
-      res.json({ logs: logs.slice(0, maxItems) });
+      // Newest first, capped, filtered by the database (the audit log only ever grows)
+      const parsed = limit ? parseInt(limit as string, 10) : 200;
+      const maxItems = Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, 1000) : 200;
+      const logs: AuditLog[] = await (await auditCol.find(isSet(module) ? { module } : {}))
+        .sort({ createdAt: -1 })
+        .limit(maxItems)
+        .toArray();
+      res.json({ logs });
     } catch (error: any) {
       res.status(500).json({ error: 'Failed to fetch audit trail report.' });
     }

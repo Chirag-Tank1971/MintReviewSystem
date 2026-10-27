@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { MongoClient, Db } from 'mongodb';
 import fs from 'fs';
 import path from 'path';
+import { matchesFilter } from './queryMatcher.js';
 
 import {
   User,
@@ -80,6 +81,36 @@ function loadFromDisk(collectionName: string): any[] | null {
   return null;
 }
 
+export class MemoryCursor<T> {
+  private sortSpec: Record<string, 1 | -1> | null = null;
+  private skipN = 0;
+  private limitN = 0;
+  constructor(private rows: T[]) {}
+
+  sort(spec: Record<string, 1 | -1>) { this.sortSpec = spec; return this; }
+  skip(n: number) { this.skipN = Math.max(0, n || 0); return this; }
+  limit(n: number) { this.limitN = Math.max(0, n || 0); return this; }
+
+  async toArray(): Promise<T[]> {
+    let out = [...this.rows];
+    if (this.sortSpec) {
+      const keys = Object.entries(this.sortSpec);
+      out.sort((a: any, b: any) => {
+        for (const [k, dir] of keys) {
+          const av = a?.[k], bv = b?.[k];
+          if (av === bv) continue;
+          if (av === undefined || av === null) return -dir; // missing sorts first ascending, like MongoDB
+          if (bv === undefined || bv === null) return dir;
+          return (av < bv ? -1 : 1) * dir;
+        }
+        return 0;
+      });
+    }
+    out = out.slice(this.skipN);
+    return this.limitN > 0 ? out.slice(0, this.limitN) : out;
+  }
+}
+
 // In-memory / document collections store with MongoDB-compatible API and disk persistence
 class InMemoryCollection<T extends { id?: string; _id?: any }> {
   private items: Map<string, T> = new Map();
@@ -146,32 +177,11 @@ class InMemoryCollection<T extends { id?: string; _id?: any }> {
     }
   }
 
-  async find(filter: any = {}): Promise<{ toArray: () => Promise<T[]> }> {
-    const list = Array.from(this.items.values()).filter((item) => {
-      for (const [key, val] of Object.entries(filter)) {
-        if (key === '$or' && Array.isArray(val)) {
-          const matchOr = val.some((subFilter) =>
-            Object.entries(subFilter).every(([subKey, subVal]) => (item as any)[subKey] === subVal)
-          );
-          if (!matchOr) return false;
-          continue;
-        }
-        if (typeof val === 'object' && val !== null && Array.isArray((val as any).$in)) {
-          if (!(val as any).$in.includes((item as any)[key])) return false;
-          continue;
-        }
-        if (typeof val === 'object' && val !== null && '$ne' in (val as any)) {
-          if ((item as any)[key] === (val as any).$ne) return false;
-          continue;
-        }
-        if ((item as any)[key] !== val) return false;
-      }
-      return true;
-    });
-
-    return {
-      toArray: async () => list,
-    };
+  // Returns a cursor-like object with MongoDB's chainable sort/skip/limit, so the same
+  // `(await col.find(q)).sort(...).skip(...).limit(...).toArray()` code runs on both stores.
+  // Projection options are accepted and ignored (full documents are returned).
+  async find(filter: any = {}, _options?: any): Promise<MemoryCursor<T>> {
+    return new MemoryCursor(Array.from(this.items.values()).filter((item) => matchesFilter(item, filter)));
   }
 
   async findOne(filter: any = {}): Promise<T | null> {
@@ -391,43 +401,68 @@ export function getDbCollection(collectionName: keyof typeof memoryDb): any {
 
 async function ensureMongoIndexes(): Promise<void> {
   console.log('[Database] Ensuring MongoDB collections and indexes are ready...');
-  try {
-    const revCol = getDbCollection('employeeReviews');
-    await revCol.createIndex({ employeeId: 1, reviewPeriodId: 1 }, { unique: true });
-    await revCol.createIndex({ employeeId: 1 });
-    await revCol.createIndex({ managerId: 1 });
-    await revCol.createIndex({ status: 1 });
-    await revCol.createIndex({ reviewPeriodId: 1 });
+  // Each index is created on its own, so one failure (e.g. duplicate data blocking a unique
+  // index) is logged instead of silently skipping every index after it. Re-creating an
+  // existing index is a no-op in MongoDB.
+  const indexes: Array<[keyof typeof memoryDb, Record<string, 1 | -1>, { unique?: boolean }?]> = [
+    // Reviews: every route looks them up by `id`; the list filters below back the scoped queries
+    ['employeeReviews', { id: 1 }],
+    ['employeeReviews', { employeeId: 1, reviewPeriodId: 1 }, { unique: true }],
+    ['employeeReviews', { employeeId: 1 }],
+    ['employeeReviews', { managerId: 1 }],
+    ['employeeReviews', { managerIds: 1 }],
+    ['employeeReviews', { hodId: 1 }],
+    ['employeeReviews', { departmentId: 1 }],
+    ['employeeReviews', { status: 1 }],
+    ['employeeReviews', { reviewPeriodId: 1 }],
 
-    const appCol = getDbCollection('appraisals');
-    await appCol.createIndex({ employeeId: 1, appraisalYear: 1 }, { unique: true });
-    await appCol.createIndex({ employeeId: 1 });
-    await appCol.createIndex({ status: 1 });
-    await appCol.createIndex({ appraisalYear: 1 });
-    await appCol.createIndex({ cycleId: 1 });
+    ['appraisals', { id: 1 }],
+    ['appraisals', { employeeId: 1, appraisalYear: 1 }, { unique: true }],
+    ['appraisals', { employeeId: 1 }],
+    ['appraisals', { managerId: 1 }],
+    ['appraisals', { managerIds: 1 }],
+    ['appraisals', { hodId: 1 }],
+    ['appraisals', { departmentId: 1 }],
+    ['appraisals', { status: 1 }],
+    ['appraisals', { appraisalYear: 1 }],
+    ['appraisals', { cycleId: 1 }],
 
-    const empCol = getDbCollection('employees');
-    await empCol.createIndex({ employeeCode: 1 }, { unique: true });
-    await empCol.createIndex({ id: 1 });
-    await empCol.createIndex({ departmentId: 1 });
-    await empCol.createIndex({ managerId: 1 });
-    await empCol.createIndex({ status: 1 });
+    ['employees', { employeeCode: 1 }, { unique: true }],
+    ['employees', { id: 1 }],
+    ['employees', { departmentId: 1 }],
+    ['employees', { managerId: 1 }],
+    ['employees', { managerIds: 1 }],
+    ['employees', { hodId: 1 }],
+    ['employees', { status: 1 }],
 
-    const notifCol = getDbCollection('notifications');
-    await notifCol.createIndex({ userId: 1 });
-    await notifCol.createIndex({ isRead: 1 });
+    ['notifications', { id: 1 }],
+    ['notifications', { userId: 1 }],
+    ['notifications', { isRead: 1 }],
 
-    const pipCol = getDbCollection('performanceImprovementPlans');
-    await pipCol.createIndex({ employeeId: 1 });
-    await pipCol.createIndex({ status: 1 });
-    await pipCol.createIndex({ managerId: 1 });
-    await pipCol.createIndex({ hodId: 1 });
+    ['performanceImprovementPlans', { id: 1 }],
+    ['performanceImprovementPlans', { employeeId: 1 }],
+    ['performanceImprovementPlans', { status: 1 }],
+    ['performanceImprovementPlans', { managerId: 1 }],
+    ['performanceImprovementPlans', { hodId: 1 }],
 
-    await getDbCollection('users').createIndex({ email: 1 }, { unique: true });
-  } catch (err) {
-    // Indexes might already exist
+    ['auditLogs', { createdAt: -1 }],
+    ['auditLogs', { module: 1, createdAt: -1 }],
+
+    ['users', { email: 1 }, { unique: true }],
+    ['users', { id: 1 }],
+    ['users', { employeeId: 1 }],
+  ];
+
+  let failed = 0;
+  for (const [collection, keys, options] of indexes) {
+    try {
+      await getDbCollection(collection).createIndex(keys, options);
+    } catch (err: any) {
+      failed++;
+      console.error(`[Database] Could not create index ${collection} ${JSON.stringify(keys)}: ${err?.message}`);
+    }
   }
-  console.log('[Database] MongoDB collections ready and indexed.');
+  console.log(`[Database] MongoDB collections ready and indexed${failed ? ` (${failed} index(es) failed, see above)` : ''}.`);
 }
 
 export async function getDatabaseStatus(): Promise<DbStatus> {

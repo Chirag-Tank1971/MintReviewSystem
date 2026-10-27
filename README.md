@@ -375,7 +375,6 @@ VITE_ENABLE_DEMO_PERSONAS=false
 | `npm run dev` | Starts backend development server with hot-reloading via `tsx watch` |
 | `npm run build` | Bundles backend into single-file CommonJS distribution using `esbuild` |
 | `npm start` | Runs the compiled production bundle (`dist/server.cjs`) |
-| `npm test` | Executes the Vitest test suite (`vitest run --passWithNoTests`) |
 | `npm run typecheck` | Validates TypeScript types across the backend codebase (`tsc --noEmit`) |
 | `npm run lint` | Runs ESLint checks on backend files |
 

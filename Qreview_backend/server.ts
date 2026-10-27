@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 dotenv.config({ override: true });
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import path from 'path';
 import fs from 'fs';
 import rateLimit from 'express-rate-limit';
@@ -107,6 +108,22 @@ async function startServer() {
 
   app.use(corsMiddleware);
   app.options('*', corsMiddleware);
+
+  // gzip responses over 1 KB: large JSON lists shrink roughly 5-10x on the wire
+  app.use(compression({ threshold: 1024 }));
+
+  // Always-on slow-request log (also in production), so slow endpoints show up in the host's logs
+  const SLOW_REQUEST_MS = Number(process.env.SLOW_REQUEST_MS) || 800;
+  app.use((req, res, next) => {
+    const start = process.hrtime.bigint();
+    res.on('finish', () => {
+      const ms = Number(process.hrtime.bigint() - start) / 1e6;
+      if (ms >= SLOW_REQUEST_MS) {
+        bootLog(`[SLOW] ${req.method} ${req.originalUrl.split('?')[0]} ${res.statusCode} ${ms.toFixed(0)}ms`);
+      }
+    });
+    next();
+  });
 
   // Essential HTTP security headers
   app.use((_req, res, next) => {

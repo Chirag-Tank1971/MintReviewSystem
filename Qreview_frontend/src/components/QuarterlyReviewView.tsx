@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useDeferredValue } from 'react';
 import { createPortal } from 'react-dom';
 import {
   EmployeeReview,
@@ -447,6 +447,9 @@ export const QuarterlyReviewView: React.FC<QuarterlyReviewViewProps> = ({
     }
   };
 
+  // The search box stays instant; re-filtering the table and charts runs at lower priority behind it
+  const deferredSearch = useDeferredValue(searchQuery);
+
   // Filtered reviews in memory for search & appraisal due toggle & inactive toggle
   const baseFilteredReviews = useMemo(() => {
     return reviews.filter((r) => {
@@ -455,8 +458,8 @@ export const QuarterlyReviewView: React.FC<QuarterlyReviewViewProps> = ({
       if (filterReviewType === 'QUARTERLY' && (r.reviewType === 'PIP_WEEKLY' || r.reviewType === 'PIP_FINAL')) return false;
       if (filterReviewType === 'PIP' && r.reviewType !== 'PIP_WEEKLY' && r.reviewType !== 'PIP_FINAL') return false;
       if (filterManagerId !== 'ALL' && r.managerId !== filterManagerId && !r.managerIds?.includes(filterManagerId)) return false;
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
+      if (deferredSearch.trim()) {
+        const q = deferredSearch.trim().toLowerCase();
         const matchesName = r.employeeName?.toLowerCase().includes(q);
         const matchesCode = r.employeeCode?.toLowerCase().includes(q);
         const matchesDept = r.departmentName?.toLowerCase().includes(q);
@@ -468,7 +471,7 @@ export const QuarterlyReviewView: React.FC<QuarterlyReviewViewProps> = ({
       }
       return true;
     });
-  }, [reviews, searchQuery, appraisalDueOnly, hideInactive, filterManagerId, filterReviewType]);
+  }, [reviews, deferredSearch, appraisalDueOnly, hideInactive, filterManagerId, filterReviewType]);
 
   const quickViewCounts = useMemo(() => {
     const counts = {} as Record<QuickView, number>;

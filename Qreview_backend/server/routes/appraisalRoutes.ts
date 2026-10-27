@@ -25,6 +25,7 @@ import { renderAppraisalLetterReleasedEmail } from '../services/emailTemplates.j
 import { getActivePipForEmployee } from '../services/pipService.js';
 import { checkDepartmentBudget, getDepartmentBudgetSnapshot } from '../services/departmentBudget.js';
 import { computeAppraisalMatrix, buildQuarterlyRollup, getRatingBand, RatingBand, refreshAppraisalScore } from '../services/appraisalScoring.js';
+import { allOf, employeeIdsWhere, employeeStatusMap, escapeRegex, exactCi, isSet, searchFilter } from '../queryHelpers.js';
 
 export const appraisalRouter = Router();
 
@@ -131,6 +132,48 @@ appraisalRouter.get(
 );
 
 /**
+ * Which appraisals the caller may see, as a database query (instead of loading every appraisal
+ * and employee and filtering in JS).
+ *  - EMPLOYEE: strictly their own record.
+ *  - MANAGER / REPORTING_MANAGER / HOD: direct reports, their own record, and (for HODs) their
+ *    department roll-up. The manager and HOD relationships are checked independently so a person
+ *    who holds both capacities for an employee (e.g. is both their reporting manager and their HOD)
+ *    sees the record regardless of which single role is stored on their account.
+ *  - HR / SUPER_ADMIN / MANAGEMENT: organization-wide (empty filter).
+ */
+export async function appraisalScopeFilter(req: AuthenticatedRequest): Promise<Record<string, any>> {
+  const user = req.user;
+  if (!user) return { employeeId: '__none__' };
+  if (user.role === 'EMPLOYEE') return { employeeId: user.employeeId || '__none__' };
+  if (!['REPORTING_MANAGER', 'MANAGER', 'HOD'].includes(user.role)) return {};
+
+  const me = user.employeeId;
+  if (!me) return { employeeId: '__none__' };
+  const isHodRole = user.role === 'HOD';
+  const userDeptId = req.employeeProfile?.departmentId;
+  const userDeptName = req.employeeProfile?.departmentName;
+  const relatedEmployeeIds = await employeeIdsWhere({
+    $or: [
+      { managerId: me },
+      { managerIds: me },
+      { hodId: me },
+      ...(user.name ? [{ managerName: { $regex: exactCi(user.name) } }] : []),
+      ...(isHodRole && userDeptId ? [{ departmentId: userDeptId }] : []),
+    ],
+  });
+  return {
+    $or: [
+      { managerId: me },
+      { managerIds: me },
+      { hodId: me },
+      { employeeId: { $in: [...relatedEmployeeIds, me] } },
+      ...(isHodRole && userDeptId ? [{ departmentId: userDeptId }] : []),
+      ...(isHodRole && userDeptName ? [{ departmentName: { $regex: exactCi(userDeptName) } }] : []),
+    ],
+  };
+}
+
+/**
  * GET /api/appraisals
  * List annual appraisals with filtering & strict RBAC data scoping
  */
@@ -145,117 +188,53 @@ appraisalRouter.get('/appraisals', async (req: AuthenticatedRequest, res: Respon
     const { cycleId, year, month, departmentId, status, search, onlyMine, managerId } = req.query;
 
     const appraisalsCol = getDbCollection('appraisals');
-    const employeesCol = getDbCollection('employees');
 
-    const appraisalFilter: any = {};
-    if (user.role === 'EMPLOYEE' && user.employeeId) {
-      appraisalFilter.employeeId = user.employeeId;
-    }
-    if (cycleId && cycleId !== 'ALL') {
-      appraisalFilter.cycleId = cycleId;
-    }
+    const filters: Record<string, any> = {};
+    if (isSet(cycleId)) filters.cycleId = cycleId;
     if (year) {
       const targetYear = parseInt(year as string, 10);
-      if (!isNaN(targetYear)) appraisalFilter.appraisalYear = targetYear;
+      if (!isNaN(targetYear)) filters.appraisalYear = targetYear;
     }
     if (month) {
       const targetMonth = parseInt(month as string, 10);
-      if (!isNaN(targetMonth)) appraisalFilter.appraisalMonth = targetMonth;
+      if (!isNaN(targetMonth)) filters.appraisalMonth = targetMonth;
     }
-    if (status && status !== 'ALL') {
-      appraisalFilter.status = status;
-    }
+    if (isSet(status)) filters.status = status;
 
-    let appraisals: Appraisal[] = await (await appraisalsCol.find(appraisalFilter)).toArray();
-    const allEmployees: Employee[] = await (await employeesCol.find({})).toArray();
-    const empMap = new Map<string, Employee>();
-    allEmployees.forEach((e) => empMap.set(e.id, e));
+    const scope = await appraisalScopeFilter(req);
 
-    // Drop orphaned appraisals whose employee record no longer exists
-    // (e.g. removed outside the normal delete-employee cascade)
-    appraisals = appraisals.filter((a) => empMap.has(a.employeeId));
-
-    // Strict RBAC Scoping:
-    if (user.role === 'EMPLOYEE') {
-      // Employees can STRICTLY ONLY view their own appraisal record
-      appraisals = appraisals.filter((a) => a.employeeId === user.employeeId);
-    } else if (['REPORTING_MANAGER', 'MANAGER', 'HOD'].includes(user.role)) {
-      // Managers and HODs can view direct reports, their own record, and (for HODs) their
-      // department roll-up. The manager and HOD relationships are checked independently so a
-      // person who holds both capacities for an employee (e.g. is both their reporting manager
-      // and their HOD) sees the record regardless of which single role is stored on their account.
-      const isHodRole = user.role === 'HOD';
-      appraisals = appraisals.filter((a) => {
-        const empRecord = empMap.get(a.employeeId);
-        const userDeptId = req.employeeProfile?.departmentId;
-        const userDeptName = req.employeeProfile?.departmentName?.toLowerCase();
-        return (
-          a.managerId === user.employeeId ||
-          Boolean(a.managerIds?.includes(user.employeeId)) ||
-          a.hodId === user.employeeId ||
-          a.employeeId === user.employeeId ||
-          empRecord?.managerId === user.employeeId ||
-          Boolean(empRecord?.managerIds?.includes(user.employeeId ?? '')) ||
-          empRecord?.hodId === user.employeeId ||
-          (user.email && empRecord?.managerName?.toLowerCase() === user.name.toLowerCase()) ||
-          (isHodRole && userDeptId && a.departmentId === userDeptId) ||
-          (isHodRole && userDeptId && empRecord?.departmentId === userDeptId) ||
-          (isHodRole && userDeptName && a.departmentName?.toLowerCase() === userDeptName)
-        );
-      });
-    }
-    // HR, SUPER_ADMIN, MANAGEMENT have organization-wide access
-
+    let onlyMineFilter: Record<string, any> | null = null;
     if (onlyMine === 'true' && user.employeeId) {
-      appraisals = appraisals.filter((a) => {
-        const empRecord = empMap.get(a.employeeId);
-        return (
-          (a.managerId === user.employeeId ||
-            Boolean(a.managerIds?.includes(user.employeeId)) ||
-            empRecord?.managerId === user.employeeId ||
-            Boolean(empRecord?.managerIds?.includes(user.employeeId ?? ''))) &&
-          a.employeeId !== user.employeeId
-        );
-      });
+      const me = user.employeeId;
+      const directIds = await employeeIdsWhere({ $or: [{ managerId: me }, { managerIds: me }] });
+      onlyMineFilter = {
+        $or: [{ managerId: me }, { managerIds: me }, { employeeId: { $in: directIds } }],
+        employeeId: { $ne: me },
+      };
     }
 
-    // Query Filters
-    if (cycleId && cycleId !== 'ALL') {
-      appraisals = appraisals.filter((a) => a.cycleId === cycleId);
-    }
-    if (year) {
-      const targetYear = parseInt(year as string, 10);
-      if (!isNaN(targetYear)) {
-        appraisals = appraisals.filter((a) => a.appraisalYear === targetYear);
-      }
-    }
-    if (month) {
-      const targetMonth = parseInt(month as string, 10);
-      if (!isNaN(targetMonth)) {
-        appraisals = appraisals.filter((a) => a.appraisalMonth === targetMonth);
-      }
-    }
-    if (departmentId && departmentId !== 'ALL') {
-      appraisals = appraisals.filter(
-        (a) => a.departmentId === departmentId || a.departmentName?.toLowerCase().includes((departmentId as string).toLowerCase())
-      );
-    }
-    if (managerId) {
-      appraisals = appraisals.filter((a) => a.managerId === managerId || Boolean(a.managerIds?.includes(managerId as string)));
-    }
-    if (status && status !== 'ALL') {
-      appraisals = appraisals.filter((a) => a.status === status);
-    }
-    if (search) {
-      const term = (search as string).toLowerCase();
-      appraisals = appraisals.filter(
-        (a) =>
-          a.employeeName.toLowerCase().includes(term) ||
-          a.employeeCode.toLowerCase().includes(term) ||
-          a.designationName.toLowerCase().includes(term) ||
-          a.departmentName.toLowerCase().includes(term)
-      );
-    }
+    const departmentFilter = isSet(departmentId)
+      ? { $or: [{ departmentId }, { departmentName: { $regex: new RegExp(escapeRegex(departmentId), 'i') } }] }
+      : null;
+    const managerFilter = isSet(managerId) ? { $or: [{ managerId }, { managerIds: managerId }] } : null;
+
+    let appraisals: Appraisal[] = await (
+      await appraisalsCol.find(
+        allOf(
+          scope,
+          filters,
+          onlyMineFilter,
+          departmentFilter,
+          managerFilter,
+          searchFilter(search, ['employeeName', 'employeeCode', 'designationName', 'departmentName'])
+        )
+      )
+    ).toArray();
+
+    // Employment status for just these employees; an appraisal whose employee record no longer
+    // exists (removed outside the normal delete cascade) is an orphan and is dropped
+    const statusById = await employeeStatusMap(appraisals.map((a) => a.employeeId));
+    appraisals = appraisals.filter((a) => statusById.has(a.employeeId));
 
     // Sort: most recent appraisal year/month, then by score
     appraisals.sort((a, b) => {
@@ -264,16 +243,9 @@ appraisalRouter.get('/appraisals', async (req: AuthenticatedRequest, res: Respon
       return b.averageQuarterlyScore - a.averageQuarterlyScore;
     });
 
-    // Enrich with real-time employee employment status
-    const enrichedAppraisals = appraisals.map((a) => {
-      const empRecord = empMap.get(a.employeeId);
-      return {
-        ...a,
-        employeeStatus: empRecord?.status || a.employeeStatus || 'ACTIVE',
-      };
-    });
-
-    res.json(enrichedAppraisals);
+    res.json(
+      appraisals.map((a) => ({ ...a, employeeStatus: statusById.get(a.employeeId) || a.employeeStatus || 'ACTIVE' }))
+    );
   } catch (err: any) {
     console.error('Error in GET /api/appraisals:', err);
     res.status(500).json({ error: 'Failed to fetch appraisals' });

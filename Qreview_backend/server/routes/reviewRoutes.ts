@@ -22,6 +22,7 @@ import {
 } from '../../src/types/index.js';
 import { sendNotificationEmail, resolveRecipient } from '../services/emailService.js';
 import { refreshEmployeeAppraisalScores } from '../services/appraisalScoring.js';
+import { allOf, employeeIdsWhere, employeeStatusMap, exactCi, isSet, searchFilter } from '../queryHelpers.js';
 import { renderSelfAssessmentSubmittedEmail, renderManagerReviewSubmittedEmail } from '../services/emailTemplates.js';
 import {
   generateQuarterlyReviews,
@@ -227,145 +228,111 @@ reviewRouter.put(
 // ==========================================
 
 /**
+ * Which reviews the caller may see, as a database query (instead of loading every review and
+ * employee and filtering in JS). Mirrors the previous in-memory rules:
+ *  - EMPLOYEE: their own reviews.
+ *  - MANAGER / REPORTING_MANAGER: reviews they manage (primary or dual), of their direct reports
+ *    (by the employee record's manager fields), and their own.
+ *  - HOD: reviews where they are HOD or manager, of employees who report to them, in their
+ *    department (by review or by the employee's current department), and their own.
+ *  - SUPER_ADMIN / HR / MANAGEMENT: everything (empty filter).
+ */
+export async function reviewScopeFilter(req: AuthenticatedRequest): Promise<Record<string, any>> {
+  const role = req.user?.role;
+  const empId = req.user?.employeeId;
+  const me = [empId, req.user?.id].filter(Boolean) as string[];
+
+  if (role === 'EMPLOYEE') return { employeeId: empId || '__none__' };
+
+  if (role === 'MANAGER' || role === 'REPORTING_MANAGER') {
+    const teamIds = await employeeIdsWhere({ $or: [{ managerId: { $in: me } }, { managerIds: { $in: me } }] });
+    return {
+      $or: [
+        { managerId: { $in: me } },
+        { managerIds: { $in: me } },
+        { employeeId: { $in: [...teamIds, ...(empId ? [empId] : [])] } },
+      ],
+    };
+  }
+
+  if (role === 'HOD') {
+    if (!empId) return { employeeId: '__none__' };
+    const deptId = req.employeeProfile?.departmentId;
+    const deptName = req.employeeProfile?.departmentName;
+    const teamIds = await employeeIdsWhere({
+      $or: [{ hodId: empId }, { managerId: empId }, ...(deptId ? [{ departmentId: deptId }] : [])],
+    });
+    return {
+      $or: [
+        { hodId: empId },
+        { managerId: empId },
+        { employeeId: { $in: [...teamIds, empId] } },
+        ...(deptId ? [{ departmentId: deptId }] : []),
+        ...(deptName ? [{ departmentName: { $regex: exactCi(deptName) } }] : []),
+      ],
+    };
+  }
+
+  return {};
+}
+
+// The audit history grows with every save. List views only read these entries (return count,
+// self-submitted); opening a review fetches the complete record from GET /reviews/:id.
+const LIST_HISTORY_ACTIONS = new Set(['RETURNED', 'HOD_RETURNED', 'SELF_SUBMITTED']);
+export function toListRow<T extends EmployeeReview>(r: T): T {
+  return { ...r, actionHistory: (r.actionHistory || []).filter((a) => LIST_HISTORY_ACTIONS.has(a.action)) };
+}
+
+/**
  * GET /api/reviews
  * Query parameters: periodId, departmentId, managerId, employeeId, status, search, onlyMine
  */
 reviewRouter.get('/reviews', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { periodId, departmentId, managerId, employeeId, status, search, onlyMine } = req.query;
-
     const reviewCol = getDbCollection('employeeReviews');
-    const employeesCol = getDbCollection('employees');
 
-    const reviewQuery: any = {};
-    if (req.user?.role === 'EMPLOYEE' && req.user?.employeeId) {
-      reviewQuery.employeeId = req.user.employeeId;
-    } else if (employeeId) {
-      reviewQuery.employeeId = employeeId;
-    }
-    if (periodId && periodId !== 'ALL') {
-      reviewQuery.reviewPeriodId = periodId;
-    }
-    if (status && status !== 'ALL' && status !== 'undefined') {
-      if (status === 'SELF_ASSESSED') {
-        reviewQuery.status = 'MANAGER_PENDING';
-      } else if (status === 'MANAGER_COMPLETED' || status === 'HR_PENDING') {
-        reviewQuery.status = { $in: ['HR_PENDING', 'MANAGER_COMPLETED'] };
-      } else {
-        reviewQuery.status = status;
-      }
+    const filters: Record<string, any> = {};
+    if (isSet(periodId)) filters.reviewPeriodId = periodId;
+    if (isSet(departmentId)) filters.departmentId = departmentId;
+    if (isSet(managerId)) filters.managerId = managerId;
+    if (isSet(employeeId)) filters.employeeId = employeeId;
+    if (isSet(status)) {
+      if (status === 'SELF_ASSESSED') filters.status = 'MANAGER_PENDING';
+      else if (status === 'MANAGER_COMPLETED' || status === 'HR_PENDING') filters.status = { $in: ['HR_PENDING', 'MANAGER_COMPLETED'] };
+      else filters.status = status;
     }
 
-    let reviews: EmployeeReview[] = await (await reviewCol.find(reviewQuery)).toArray();
-    const allEmployees: Employee[] = await (await employeesCol.find({})).toArray();
-    const empMap = new Map<string, Employee>();
-    allEmployees.forEach((e) => empMap.set(e.id, e));
-
-    // Strict RBAC Role-based visibility filtering
-    if (req.user?.role === 'EMPLOYEE') {
-      reviews = reviews.filter((r) => r.employeeId === req.user?.employeeId);
-    } else if (req.user?.role === 'MANAGER' || req.user?.role === 'REPORTING_MANAGER') {
-      // Managers can see their direct reports (or themselves) - strictly by ID
-      reviews = reviews.filter((r) => {
-        const empRecord = empMap.get(r.employeeId);
-        return (
-          r.managerId === req.user?.employeeId ||
-          r.managerId === req.user?.id ||
-          r.employeeId === req.user?.employeeId ||
-          empRecord?.managerId === req.user?.employeeId ||
-          empRecord?.managerId === req.user?.id ||
-          Boolean(empRecord?.managerIds?.includes(req.user?.employeeId ?? '')) ||
-          Boolean(empRecord?.managerIds?.includes(req.user?.id ?? ''))
-        );
-      });
-    } else if (req.user?.role === 'HOD') {
-      // HODs can see their department roll-ups, direct reports, or themselves
-      reviews = reviews.filter((r) => {
-        const empRecord = empMap.get(r.employeeId);
-        const userDeptId = req.employeeProfile?.departmentId;
-        const userDeptName = req.employeeProfile?.departmentName?.toLowerCase();
-        return (
-          r.hodId === req.user?.employeeId ||
-          r.managerId === req.user?.employeeId ||
-          r.employeeId === req.user?.employeeId ||
-          empRecord?.hodId === req.user?.employeeId ||
-          empRecord?.managerId === req.user?.employeeId ||
-          (userDeptId && r.departmentId === userDeptId) ||
-          (userDeptId && empRecord?.departmentId === userDeptId) ||
-          (userDeptName && r.departmentName?.toLowerCase() === userDeptName)
-        );
-      });
-    }
-    // SUPER_ADMIN and HR can see everything.
-
-    if (onlyMine === 'true' && req.user?.employeeId) {
-      reviews = reviews.filter((r) => {
-        const empRecord = empMap.get(r.employeeId);
-        return (
-          (r.managerId === req.user?.employeeId ||
-            empRecord?.managerId === req.user?.employeeId ||
-            Boolean(empRecord?.managerIds?.includes(req.user?.employeeId ?? ''))) &&
-          r.employeeId !== req.user?.employeeId
-        );
-      });
+    // "Only my team": reviews I manage or of my direct reports, never my own
+    let onlyMineFilter: Record<string, any> | null = null;
+    const myEmpId = req.user?.employeeId;
+    if (onlyMine === 'true' && myEmpId) {
+      const directIds = await employeeIdsWhere({ $or: [{ managerId: myEmpId }, { managerIds: myEmpId }] });
+      onlyMineFilter = {
+        $or: [{ managerId: myEmpId }, { employeeId: { $in: directIds } }],
+        employeeId: { $ne: myEmpId },
+      };
     }
 
-    if (periodId && periodId !== 'ALL' && periodId !== 'undefined') {
-      reviews = reviews.filter((r) => r.reviewPeriodId === periodId);
-    }
+    const query = allOf(
+      await reviewScopeFilter(req),
+      filters,
+      onlyMineFilter,
+      searchFilter(search, ['employeeName', 'employeeCode', 'departmentName', 'designationName', 'managerName'])
+    );
+    const reviews: EmployeeReview[] = await (await reviewCol.find(query)).toArray();
 
-    if (departmentId && departmentId !== 'ALL' && departmentId !== 'undefined') {
-      reviews = reviews.filter((r) => r.departmentId === departmentId);
-    }
-
-    if (managerId && managerId !== 'ALL' && managerId !== 'undefined') {
-      reviews = reviews.filter((r) => r.managerId === managerId);
-    }
-
-    if (employeeId && employeeId !== 'undefined') {
-      reviews = reviews.filter((r) => r.employeeId === employeeId);
-    }
-
-    if (status && status !== 'ALL' && status !== 'undefined') {
-      if (status === 'SELF_ASSESSED') {
-        reviews = reviews.filter(
-          (r) => (r.status === 'MANAGER_PENDING' && r.isSelfSubmitted) || r.status === 'MANAGER_PENDING'
-        );
-      } else if (status === 'MANAGER_COMPLETED' || status === 'HR_PENDING') {
-        reviews = reviews.filter(
-          (r) => r.status === 'HR_PENDING' || r.status === 'MANAGER_COMPLETED'
-        );
-      } else {
-        reviews = reviews.filter((r) => r.status === status);
-      }
-    }
-
-    if (search) {
-      const q = String(search).toLowerCase();
-      reviews = reviews.filter(
-        (r) =>
-          r.employeeName.toLowerCase().includes(q) ||
-          r.employeeCode.toLowerCase().includes(q) ||
-          r.departmentName.toLowerCase().includes(q) ||
-          r.designationName.toLowerCase().includes(q) ||
-          r.managerName?.toLowerCase().includes(q)
-      );
-    }
-
-    // Sort: most recently updated first
+    // Most recently updated first
     reviews.sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
 
-    // Enrich with real-time employee employment status
-    const enrichedReviews = reviews.map((r) => {
-      const empRecord = empMap.get(r.employeeId);
-      return {
-        ...r,
-        employeeStatus: empRecord?.status || r.employeeStatus || 'ACTIVE',
-      };
-    });
+    // Real-time employment status, fetched only for the employees in this result
+    const statusById = await employeeStatusMap(reviews.map((r) => r.employeeId));
 
-    res.json(enrichedReviews);
+    res.json(
+      reviews.map((r) => ({ ...toListRow(r), employeeStatus: statusById.get(r.employeeId) || r.employeeStatus || 'ACTIVE' }))
+    );
   } catch (error: any) {
+    console.error('[reviews] list failed:', error);
     res.status(500).json({ error: 'Failed to fetch employee reviews.' });
   }
 });
@@ -378,54 +345,17 @@ reviewRouter.get('/reviews/stats', async (req: AuthenticatedRequest, res: Respon
   try {
     const { periodId, departmentId } = req.query;
     const reviewCol = getDbCollection('employeeReviews');
-    const employeesCol = getDbCollection('employees');
 
-    let reviews: EmployeeReview[] = await (await reviewCol.find({})).toArray();
-    const allEmployees: Employee[] = await (await employeesCol.find({})).toArray();
-    const empMap = new Map<string, Employee>();
-    allEmployees.forEach((e) => empMap.set(e.id, e));
+    const filters: Record<string, any> = {};
+    if (isSet(periodId)) filters.reviewPeriodId = periodId;
+    if (isSet(departmentId)) filters.departmentId = departmentId;
 
-    // Strict RBAC Role-based visibility filtering
-    if (req.user?.role === 'EMPLOYEE') {
-      reviews = reviews.filter((r) => r.employeeId === req.user?.employeeId);
-    } else if (req.user?.role === 'MANAGER' || req.user?.role === 'REPORTING_MANAGER') {
-      reviews = reviews.filter((r) => {
-        const empRecord = empMap.get(r.employeeId);
-        return (
-          r.managerId === req.user?.employeeId ||
-          r.managerId === req.user?.id ||
-          r.employeeId === req.user?.employeeId ||
-          empRecord?.managerId === req.user?.employeeId ||
-          empRecord?.managerId === req.user?.id ||
-          Boolean(empRecord?.managerIds?.includes(req.user?.employeeId ?? '')) ||
-          Boolean(empRecord?.managerIds?.includes(req.user?.id ?? ''))
-        );
-      });
-    } else if (req.user?.role === 'HOD') {
-      reviews = reviews.filter((r) => {
-        const empRecord = empMap.get(r.employeeId);
-        const userDeptId = req.employeeProfile?.departmentId;
-        const userDeptName = req.employeeProfile?.departmentName?.toLowerCase();
-        return (
-          r.hodId === req.user?.employeeId ||
-          r.managerId === req.user?.employeeId ||
-          r.employeeId === req.user?.employeeId ||
-          empRecord?.hodId === req.user?.employeeId ||
-          empRecord?.managerId === req.user?.employeeId ||
-          (userDeptId && r.departmentId === userDeptId) ||
-          (userDeptId && empRecord?.departmentId === userDeptId) ||
-          (userDeptName && r.departmentName?.toLowerCase() === userDeptName)
-        );
-      });
-    }
-
-    if (periodId && periodId !== 'ALL') {
-      reviews = reviews.filter((r) => r.reviewPeriodId === periodId);
-    }
-
-    if (departmentId && departmentId !== 'ALL') {
-      reviews = reviews.filter((r) => r.departmentId === departmentId);
-    }
+    // Counting only needs these fields, so don't pull full KRA snapshots and histories
+    const reviews: EmployeeReview[] = await (
+      await reviewCol.find(allOf(await reviewScopeFilter(req), filters), {
+        projection: { status: 1, finalScore: 1, isClosed: 1, hodId: 1 },
+      })
+    ).toArray();
 
     const total = reviews.length;
     const draft = reviews.filter((r) => r.status === 'DRAFT' || r.status === 'ASSIGNED').length;
@@ -618,57 +548,41 @@ reviewRouter.get(
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const reviewCol = getDbCollection('employeeReviews');
-      const employeesCol = getDbCollection('employees');
       const managerEmployeeId = req.user?.employeeId;
-      const managerUserId = req.user?.id;
       const role = req.user?.role;
+      const me = [managerEmployeeId, req.user?.id].filter(Boolean) as string[];
+      const managerStage = { status: { $in: ['MANAGER_PENDING', 'RETURNED', 'DRAFT'] } };
 
-      let reviews: EmployeeReview[] = await (await reviewCol.find({})).toArray();
-
+      let query: Record<string, any>;
       if (role === 'HOD') {
         // Strictly scoped to reviews where this HOD is the employee's configured HOD —
         // not every review in the HOD's department (an HOD role does not imply ownership
         // of every employee's review in that department).
         // Direct-to-HOD employees: the HOD holds the scoring (manager) slot, so those reviews
         // are pending with the HOD from the start.
-        reviews = reviews.filter(
-          (r) =>
-            (r.hodId === managerEmployeeId && r.status === 'HOD_PENDING') ||
-            (r.managerId === managerEmployeeId &&
-              (r.status === 'MANAGER_PENDING' || r.status === 'RETURNED' || r.status === 'DRAFT'))
-        );
+        query = managerEmployeeId
+          ? {
+              $or: [
+                { hodId: managerEmployeeId, status: 'HOD_PENDING' },
+                { managerId: managerEmployeeId, ...managerStage },
+              ],
+            }
+          : { employeeId: '__none__' };
       } else if (role === 'REPORTING_MANAGER' || role === 'MANAGER') {
-        const allEmployees: Employee[] = await (await employeesCol.find({})).toArray();
-        const directReportIds = new Set(
-          allEmployees
-            .filter(
-              (e) =>
-                (managerEmployeeId && e.managerId === managerEmployeeId) ||
-                (managerUserId && e.managerId === managerUserId)
-            )
-            .map((e) => e.id)
-        );
-        reviews = reviews.filter(
-          (r) =>
-            (r.managerId === managerEmployeeId ||
-              r.managerId === managerUserId ||
-              directReportIds.has(r.employeeId)) &&
-            (r.status === 'MANAGER_PENDING' || r.status === 'RETURNED' || r.status === 'DRAFT')
+        // Includes the second manager of a dual-manager employee (managerIds)
+        const directReportIds = await employeeIdsWhere({ $or: [{ managerId: { $in: me } }, { managerIds: { $in: me } }] });
+        query = allOf(
+          { $or: [{ managerId: { $in: me } }, { managerIds: { $in: me } }, { employeeId: { $in: directReportIds } }] },
+          managerStage
         );
       } else {
         // SUPER_ADMIN and HR
-        reviews = reviews.filter(
-          (r) =>
-            r.status === 'MANAGER_PENDING' ||
-            r.status === 'HOD_PENDING' ||
-            r.status === 'HR_PENDING' ||
-            r.status === 'RETURNED' ||
-            r.status === 'DRAFT'
-        );
+        query = { status: { $in: ['MANAGER_PENDING', 'HOD_PENDING', 'HR_PENDING', 'RETURNED', 'DRAFT'] } };
       }
 
+      const reviews: EmployeeReview[] = await (await reviewCol.find(query)).toArray();
       reviews.sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
-      res.json(reviews);
+      res.json(reviews.map(toListRow));
     } catch (error: any) {
       res.status(500).json({ error: 'Failed to fetch pending reviews.' });
     }
@@ -1315,7 +1229,7 @@ reviewRouter.put(
     // Official finalScore: Manager's own score until HOD has also independently scored,
     // at which point it becomes the average of the two.
     const effectiveHodScore = returnEdits.clearedHodScore ? undefined : existing.hodScore;
-    let finalScore =
+    const finalScore =
       effectiveHodScore !== undefined && effectiveHodScore !== null
         ? Number(((managerScore + effectiveHodScore) / 2).toFixed(2))
         : managerScore;
@@ -1368,8 +1282,8 @@ reviewRouter.put(
     };
 
     // Combine strengths / improvements / comments when both have submitted in dual mode
-    let combinedStrengths = strengths !== undefined ? strengths : existing.strengths;
-    let combinedImprovements = improvements !== undefined ? improvements : existing.improvements;
+    const combinedStrengths = strengths !== undefined ? strengths : existing.strengths;
+    const combinedImprovements = improvements !== undefined ? improvements : existing.improvements;
     let combinedComments = managerOverallComments !== undefined ? managerOverallComments : existing.managerOverallComments;
 
     if (isDualManager && allManagersSubmitted) {

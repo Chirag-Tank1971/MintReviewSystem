@@ -856,8 +856,8 @@ mastersRouter.post('/employees', requireRoles('SUPER_ADMIN', 'HR'), async (req: 
 
     // Validate Reporting Manager & HOD
     const isDirectToHod = Boolean(reportsDirectlyToHod);
-    let finalManagerIds: string[] = [];
-    let finalManagerNames: string[] = [];
+    const finalManagerIds: string[] = [];
+    const finalManagerNames: string[] = [];
     let primaryManagerId: string | undefined;
     let primaryManagerName: string | undefined;
 
@@ -1935,7 +1935,15 @@ mastersRouter.post('/masters/normalize-employee-codes', requireRoles('SUPER_ADMI
  * lightweight unread-count endpoint below, so their side effects and results never drift
  * out of sync with each other.
  */
+// The badge polls often; the self-assessment sync below only needs to run occasionally per user.
+// ponytail: per-process memory, so with several backend instances each throttles on its own (still correct, just less saving).
+const AUTO_SYNC_INTERVAL_MS = 60_000;
+const lastAutoSyncAt = new Map<string, number>();
+
 async function runNotificationAutoSync(currentUser: User): Promise<void> {
+  const now = Date.now();
+  if (now - (lastAutoSyncAt.get(currentUser.id) || 0) < AUTO_SYNC_INTERVAL_MS) return;
+  lastAutoSyncAt.set(currentUser.id, now);
   const notifsCol = getDbCollection('notifications');
 
   // Auto-sync self-assessment notifications for current user/employee with pending reviews
@@ -2100,7 +2108,7 @@ export async function computeVisibleNotifications(currentUser: User): Promise<an
       ? await rawNotifications.toArray()
       : [];
 
-  let filtered: any[] = notifications;
+  let filtered: any[];
 
   if (isSuperAdmin) {
     filtered = notifications.filter((n) => {
@@ -2202,8 +2210,12 @@ mastersRouter.get('/notifications/unread-count', async (req: AuthenticatedReques
       return res.json({ unreadCount: 0 });
     }
     const filtered = await computeVisibleNotifications(currentUser);
-    const unreadCount = filtered.filter((n) => !n.isRead).length;
-    res.json({ unreadCount });
+    const unread = filtered.filter((n) => !n.isRead);
+    // Ids let the client spot a new high-priority item (for its toast) without re-downloading the list
+    res.json({
+      unreadCount: unread.length,
+      highPriorityUnreadIds: unread.filter((n) => n.priority === 'HIGH').map((n) => n.id),
+    });
   } catch (error: any) {
     console.error('Failed to fetch unread notification count:', error);
     res.status(500).json({ error: 'Failed to fetch unread notification count.' });

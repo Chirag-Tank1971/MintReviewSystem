@@ -1,5 +1,5 @@
 import { useState, useEffect, Suspense, lazy } from 'react';
-import { LazyMotion, MotionConfig } from 'framer-motion';
+import { LazyMotion, MotionConfig, domMax } from 'framer-motion';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { ThemeProvider } from './context/ThemeContext';
@@ -473,16 +473,14 @@ function AppContent() {
   );
 }
 
-// Animation engine loads after first paint; every animated element uses the lightweight `m.` component.
-const loadMotionFeatures = () => import('./animations/motionFeatures').then((mod) => mod.default);
-
 export default function App() {
   return (
     <ThemeProvider>
       <ToastProvider>
         <AuthProvider>
           <NotificationsProvider>
-            <LazyMotion features={loadMotionFeatures} strict={false}>
+            {/* Loaded up front on purpose: pages start at opacity 0 and need the engine to fade in */}
+            <LazyMotion features={domMax} strict={false}>
               <MotionConfig reducedMotion="user">
                 <AppContent />
               </MotionConfig>

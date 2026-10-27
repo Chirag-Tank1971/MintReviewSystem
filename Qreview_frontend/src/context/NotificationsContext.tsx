@@ -14,7 +14,9 @@ const NotificationsContext = createContext<NotificationsContextType | undefined>
 
 // Single source of truth for "how often do we check for new notifications" — every consumer
 // (header badge, any future widget) reads from this one poller instead of running its own.
-const POLL_INTERVAL_MS = 8000;
+// 20s keeps the badge timely without every open tab hammering the API; actions on this tab
+// refresh instantly via the `notifications-updated` event below.
+const POLL_INTERVAL_MS = 20000;
 
 /**
  * Owns the app-wide unread-notification badge count: one lightweight poll instead of every
@@ -37,20 +39,21 @@ export const NotificationsProvider: React.FC<{ children: ReactNode }> = ({ child
   const refreshUnreadCount = useCallback(async () => {
     if (!isAuthenticated) return;
     try {
-      const count = await api.getUnreadNotificationCount();
+      const { unreadCount: count, highPriorityUnreadIds } = await api.getUnreadNotificationCount();
       setUnreadCount(count);
 
-      if (count > 0) {
+      if (seenHighPriorityIdsRef.current === null) {
+        seenHighPriorityIdsRef.current = new Set(highPriorityUnreadIds);
+        return;
+      }
+      // Only download the full list when a high-priority item we haven't toasted yet appears
+      const newIds = highPriorityUnreadIds.filter((id) => !seenHighPriorityIdsRef.current!.has(id));
+      if (newIds.length > 0) {
         const list = await api.getNotifications();
-        const highPriorityUnread = list.filter((n: any) => n.priority === 'HIGH' && !n.isRead);
-        if (seenHighPriorityIdsRef.current === null) {
-          seenHighPriorityIdsRef.current = new Set(highPriorityUnread.map((n: any) => n.id));
-        } else {
-          for (const n of highPriorityUnread) {
-            if (!seenHighPriorityIdsRef.current.has(n.id)) {
-              seenHighPriorityIdsRef.current.add(n.id);
-              toast.warning(n.message, n.title, 7000);
-            }
+        for (const n of list) {
+          if (newIds.includes(n.id) && !seenHighPriorityIdsRef.current.has(n.id)) {
+            seenHighPriorityIdsRef.current.add(n.id);
+            toast.warning(n.message, n.title, 7000);
           }
         }
       }

@@ -1303,15 +1303,15 @@ export const api = {
     );
   },
 
-  async getUnreadNotificationCount(): Promise<number> {
-    // Lightweight badge-count endpoint, safe to poll frequently (e.g. the header bell) —
-    // returns just a number instead of the full notification payload.
-    const { unreadCount } = await requestWithDedupeAndCache<{ unreadCount: number }>(
+  async getUnreadNotificationCount(): Promise<{ unreadCount: number; highPriorityUnreadIds: string[] }> {
+    // Lightweight badge endpoint, safe to poll (e.g. the header bell): a count plus the ids of
+    // unread HIGH-priority items, instead of the full notification payload.
+    const res = await requestWithDedupeAndCache<{ unreadCount: number; highPriorityUnreadIds?: string[] }>(
       `${API_BASE}/notifications/unread-count`,
       { headers: getAuthHeaders() },
       5000 // 5s cache
     );
-    return unreadCount;
+    return { unreadCount: res.unreadCount, highPriorityUnreadIds: res.highPriorityUnreadIds || [] };
   },
 
   async markNotificationRead(id: string): Promise<any> {
