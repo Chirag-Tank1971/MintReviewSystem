@@ -73,6 +73,7 @@ export interface DashboardMyReview {
     designationName?: string;
     departmentName?: string;
     managerName?: string;
+    reportsDirectlyToHod?: boolean;
     hodName?: string;
     cycleName?: string;
     email?: string;
@@ -292,9 +293,13 @@ export interface DashboardHodOverview {
     designationName?: string;
     managerId?: string;
     managerName?: string;
+    reportsDirectlyToHod?: boolean;
     reviewStatus?: string;
     stage?: string;
     lastScore?: number;
+    previousScore?: number;
+    managerScore?: number;
+    hodScore?: number;
     onPip: boolean;
     pipId?: string;
     pipStatus?: string;

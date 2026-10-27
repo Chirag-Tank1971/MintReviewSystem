@@ -151,9 +151,9 @@ export const InitiateAppraisalModal: React.FC<InitiateAppraisalModalProps> = ({
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[9990] overflow-y-auto bg-slate-900/60 dark:bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 md:p-6 ${backdropClass}`}
+      className={`fixed inset-0 z-[9990] overflow-y-auto bg-slate-900/60 dark:bg-black/70 flex items-center justify-center p-3 sm:p-4 md:p-6 ${backdropClass}`}
     >
-      <div className={`bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-lg w-full max-h-[92vh] sm:max-h-[88vh] flex flex-col overflow-hidden border border-slate-200 dark:border-slate-800 my-auto ${cardClass}`}>
+      <div className={`bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-lg w-full max-h-[92vh] sm:max-h-[88vh] flex flex-col overflow-hidden border border-slate-200 dark:border-slate-800 my-auto ${cardClass}`}>
         {/* Modal Header */}
         <div className="shrink-0 px-4 sm:px-6 py-4 bg-white dark:bg-slate-900 flex items-center justify-between border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center gap-3 min-w-0">
@@ -329,7 +329,7 @@ export const InitiateAppraisalModal: React.FC<InitiateAppraisalModalProps> = ({
             </div>
 
             {/* Action Buttons Sticky Footer */}
-            <div className="shrink-0 p-4 sm:px-6 sm:py-3.5 bg-slate-50/80 dark:bg-slate-900/90 backdrop-blur-xs border-t border-slate-100 dark:border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 sm:gap-3">
+            <div className="shrink-0 p-4 sm:px-6 sm:py-3.5 bg-slate-50/80 dark:bg-slate-900/90 border-t border-slate-100 dark:border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 sm:gap-3">
               <button
                 type="button"
                 onClick={handleClose}

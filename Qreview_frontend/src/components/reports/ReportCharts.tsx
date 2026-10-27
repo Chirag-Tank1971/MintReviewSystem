@@ -42,7 +42,7 @@ export const DonutChart: React.FC<{
 
   return (
     <div
-      className={`p-5 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-xl flex flex-col justify-between transition-all duration-700 ease-out hover:border-slate-300 dark:hover:border-slate-700 ${
+      className={`p-5 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-xl flex flex-col justify-between transition duration-700 ease-out hover:border-slate-300 dark:hover:border-slate-700 ${
         isAnimated ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-4 scale-[0.98]'
       }`}
     >
@@ -109,7 +109,7 @@ export const DonutChart: React.FC<{
 
           {/* Center text */}
           <div
-            className={`absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center transition-all duration-700 delay-200 ${
+            className={`absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center transition duration-700 delay-200 ${
               isAnimated ? 'opacity-100 scale-100' : 'opacity-0 scale-75'
             }`}
           >
@@ -151,7 +151,7 @@ export const DonutChart: React.FC<{
                 style={{
                   transitionDelay: `${120 + idx * 70}ms`,
                 }}
-                className={`p-1.5 rounded-lg transition-all duration-500 flex items-center justify-between text-xs cursor-pointer ${
+                className={`p-1.5 rounded-lg transition duration-500 flex items-center justify-between text-xs cursor-pointer ${
                   isAnimated ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-3'
                 } ${
                   isHovered
@@ -217,7 +217,7 @@ export const HorizontalBarChart: React.FC<{
 
   return (
     <div
-      className={`p-5 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-xl flex flex-col justify-between transition-all duration-700 ease-out hover:border-slate-300 dark:hover:border-slate-700 ${
+      className={`p-5 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-xl flex flex-col justify-between transition duration-700 ease-out hover:border-slate-300 dark:hover:border-slate-700 ${
         isAnimated ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-4 scale-[0.98]'
       }`}
     >
@@ -248,7 +248,7 @@ export const HorizontalBarChart: React.FC<{
                 style={{
                   transitionDelay: `${idx * 60}ms`,
                 }}
-                className={`space-y-1 text-xs group transition-all duration-500 ${
+                className={`space-y-1 text-xs group transition duration-500 ${
                   isAnimated ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-2'
                 }`}
               >
@@ -356,7 +356,7 @@ export const RatingTierChart: React.FC<RatingDistributionProps> = ({
 
   return (
     <div
-      className={`p-4 sm:p-5 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-xl flex flex-col justify-between transition-all duration-700 ease-out hover:border-slate-300 dark:hover:border-slate-700 min-w-0 ${
+      className={`p-4 sm:p-5 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-xl flex flex-col justify-between transition duration-700 ease-out hover:border-slate-300 dark:hover:border-slate-700 min-w-0 ${
         isAnimated ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-4 scale-[0.98]'
       }`}
     >
@@ -386,7 +386,7 @@ export const RatingTierChart: React.FC<RatingDistributionProps> = ({
               style={{
                 transitionDelay: `${idx * 80}ms`,
               }}
-              className={`p-2 sm:p-2.5 bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/60 rounded-xl flex flex-col items-center justify-between text-center space-y-2 hover:bg-slate-100/70 dark:hover:bg-slate-800/70 transition-all duration-500 min-w-0 w-full overflow-hidden ${
+              className={`p-2 sm:p-2.5 bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/60 rounded-xl flex flex-col items-center justify-between text-center space-y-2 hover:bg-slate-100/70 dark:hover:bg-slate-800/70 transition duration-500 min-w-0 w-full overflow-hidden ${
                 isAnimated ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'
               }`}
             >
@@ -492,7 +492,7 @@ export const TrendLineChart: React.FC<{
 
   return (
     <div
-      className={`p-5 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-xl flex flex-col justify-between transition-all duration-700 ease-out hover:border-slate-300 dark:hover:border-slate-700 ${
+      className={`p-5 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-xl flex flex-col justify-between transition duration-700 ease-out hover:border-slate-300 dark:hover:border-slate-700 ${
         isAnimated ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-4 scale-[0.98]'
       }`}
     >
@@ -598,7 +598,7 @@ export const TrendLineChart: React.FC<{
                   fill={isHovered ? CHART_COLORS.primaryHover : CHART_COLORS.primary}
                   stroke="#ffffff"
                   strokeWidth="2"
-                  className={`transition-all duration-300 drop-shadow-sm ${
+                  className={`transition duration-300 drop-shadow-sm ${
                     isAnimated ? 'opacity-100 scale-100' : 'opacity-0 scale-0'
                   }`}
                   onMouseEnter={() => setHoveredPoint(p)}

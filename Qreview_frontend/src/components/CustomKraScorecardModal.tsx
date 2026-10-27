@@ -268,9 +268,9 @@ export const CustomKraScorecardModal: React.FC<CustomKraScorecardModalProps> = (
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[9995] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto ${backdropClass}`}
+      className={`fixed inset-0 z-[9995] bg-slate-900/60 flex items-center justify-center p-3 sm:p-4 overflow-y-auto ${backdropClass}`}
     >
-      <div className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl w-full max-w-4xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col ${cardClass}`}>
+      <div className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl w-full max-w-4xl shadow-xl overflow-hidden max-h-[92vh] flex flex-col ${cardClass}`}>
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800 shrink-0">
           <div className="flex items-center gap-3">
@@ -282,7 +282,7 @@ export const CustomKraScorecardModal: React.FC<CustomKraScorecardModalProps> = (
               </p>
             </div>
           </div>
-          <button
+          <button aria-label="Close"
             type="button"
             onClick={handleClose}
             className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
@@ -516,7 +516,7 @@ export const CustomKraScorecardModal: React.FC<CustomKraScorecardModalProps> = (
                     />
                   </div>
                   <div className="col-span-1 flex justify-center">
-                    <button
+                    <button aria-label="Delete KRA"
                       type="button"
                       disabled={rows.length <= 1}
                       onClick={() => handleRemoveRow(idx)}

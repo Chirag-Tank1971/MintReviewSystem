@@ -64,9 +64,9 @@ export const AuditTrailDrawer: React.FC<AuditTrailDrawerProps> = ({
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 ${backdropClass}`}
+      className={`fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/60 p-4 ${backdropClass}`}
     >
-      <div className={`bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-800 max-w-xl w-full max-h-[85vh] flex flex-col overflow-hidden ${cardClass}`}>
+      <div className={`bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 max-w-xl w-full max-h-[85vh] flex flex-col overflow-hidden ${cardClass}`}>
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/80 dark:bg-slate-850">
           <div className="flex items-center space-x-2.5">
@@ -83,7 +83,7 @@ export const AuditTrailDrawer: React.FC<AuditTrailDrawerProps> = ({
               </p>
             </div>
           </div>
-          <button
+          <button aria-label="Close"
             type="button"
             onClick={handleClose}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
@@ -213,7 +213,7 @@ export const AuditTrailDrawer: React.FC<AuditTrailDrawerProps> = ({
                               {action.hodKraTitles.map((t, i) => (
                                 <span
                                   key={`hod_${t}_${i}`}
-                                  className="text-[11px] px-2 py-0.5 rounded-full bg-violet-50 dark:bg-violet-950/40 text-violet-800 dark:text-violet-300 border border-violet-200 dark:border-violet-800 font-semibold"
+                                  className="text-[11px] px-2 py-0.5 rounded-full bg-teal-50 dark:bg-teal-950/40 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800 font-semibold"
                                 >
                                   {t}
                                 </span>

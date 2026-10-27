@@ -47,7 +47,7 @@ export const StatusRemarksModal: React.FC<StatusRemarksModalProps> = ({
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 ${backdropClass}`}
+      className={`fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/60 p-4 ${backdropClass}`}
     >
       <div className={`bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 max-w-md w-full p-5 space-y-4 ${cardClass}`}>
         <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center space-x-2">

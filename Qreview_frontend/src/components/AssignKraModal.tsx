@@ -225,9 +225,9 @@ export const AssignKraModal: React.FC<AssignKraModalProps> = ({
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[9994] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 ${backdropClass}`}
+      className={`fixed inset-0 z-[9994] bg-slate-900/60 flex items-center justify-center p-3 sm:p-4 ${backdropClass}`}
     >
-      <div className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl w-full max-w-lg shadow-2xl overflow-hidden max-h-[85vh] flex flex-col ${cardClass}`}>
+      <div className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl w-full max-w-lg shadow-xl overflow-hidden max-h-[85vh] flex flex-col ${cardClass}`}>
         <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800 shrink-0">
           <div className="flex items-center gap-3">
             <UserPlus className="w-5 h-5 shrink-0 text-slate-400 dark:text-slate-500" aria-hidden="true" />
@@ -238,7 +238,7 @@ export const AssignKraModal: React.FC<AssignKraModalProps> = ({
               </p>
             </div>
           </div>
-          <button
+          <button aria-label="Close"
             type="button"
             onClick={handleClose}
             className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"

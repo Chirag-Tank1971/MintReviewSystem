@@ -145,7 +145,7 @@ export const LoginPage: React.FC = () => {
   const isActionLocked = isLoading || isSubmitting;
 
   return (
-    <div className="h-screen max-h-screen w-full overflow-hidden flex bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans antialiased">
+    <div className="h-dvh max-h-dvh w-full overflow-hidden flex bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans antialiased">
       {/* Brand panel (large screens): what MintReview does, shown with the app's own rating scale */}
       <aside className="hidden lg:flex lg:w-[46%] xl:w-1/2 flex-col justify-between h-full max-h-screen overflow-hidden bg-indigo-900 dark:bg-indigo-950 text-white px-8 xl:px-14 py-6 xl:py-8 shrink-0">
         <div className="flex items-center gap-2.5 shrink-0">

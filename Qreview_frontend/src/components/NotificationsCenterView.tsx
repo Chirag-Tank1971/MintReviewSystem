@@ -561,7 +561,7 @@ export const NotificationsCenterView: React.FC<NotificationsCenterViewProps> = (
           <div className="flex items-center gap-1.5 overflow-x-auto w-full lg:w-auto scrollbar-none">
             <button
               onClick={() => setActiveTab('all')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
                 activeTab === 'all'
                   ? 'bg-indigo-600 text-white'
                   : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-800'
@@ -576,7 +576,7 @@ export const NotificationsCenterView: React.FC<NotificationsCenterViewProps> = (
 
             <button
               onClick={() => setActiveTab('unread')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
                 activeTab === 'unread'
                   ? 'bg-indigo-600 text-white'
                   : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-800'
@@ -593,7 +593,7 @@ export const NotificationsCenterView: React.FC<NotificationsCenterViewProps> = (
 
             <button
               onClick={() => setActiveTab('reviews')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
                 activeTab === 'reviews'
                   ? 'bg-indigo-600 text-white'
                   : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-800'
@@ -608,7 +608,7 @@ export const NotificationsCenterView: React.FC<NotificationsCenterViewProps> = (
 
             <button
               onClick={() => setActiveTab('appraisals')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
                 activeTab === 'appraisals'
                   ? 'bg-indigo-600 text-white'
                   : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-800'
@@ -624,7 +624,7 @@ export const NotificationsCenterView: React.FC<NotificationsCenterViewProps> = (
             {isAdminOrHr && (
               <button
                 onClick={() => setActiveTab('emails')}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
                   activeTab === 'emails'
                     ? 'bg-indigo-600 text-white'
                     : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-800'
@@ -661,7 +661,7 @@ export const NotificationsCenterView: React.FC<NotificationsCenterViewProps> = (
               </button>
             )}
 
-            <button
+            <button aria-label="Refresh Stream"
               onClick={() => {
                 fetchNotifications();
                 if (isAdminOrHr) fetchEmailLogs();
@@ -688,7 +688,7 @@ export const NotificationsCenterView: React.FC<NotificationsCenterViewProps> = (
                 className="w-full pl-9 pr-8 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
               {searchQuery && (
-                <button
+                <button aria-label="Clear search"
                   onClick={() => setSearchQuery('')}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
                 >
@@ -832,7 +832,7 @@ export const NotificationsCenterView: React.FC<NotificationsCenterViewProps> = (
               return (
                 <div
                   key={`${notif.id || (notif as any)._id || 'notif'}_${idx}`}
-                    className={`p-4 sm:p-5 rounded-xl transition-all border ${
+                    className={`p-4 sm:p-5 rounded-xl transition border ${
                       notif.isRead
                         ? 'bg-white dark:bg-slate-900/60 border-slate-200/80 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700'
                         : 'bg-indigo-50/40 dark:bg-indigo-950/30 border-indigo-200/80 dark:border-indigo-900/60 text-slate-900 dark:text-white hover:border-indigo-300 dark:hover:border-indigo-700'
@@ -942,14 +942,14 @@ export const NotificationsCenterView: React.FC<NotificationsCenterViewProps> = (
 
                           <button
                             onClick={() => handleOpenWorkflow(notif)}
-                            className="inline-flex items-center gap-1 text-xs text-white font-bold px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 transition-all shrink-0 cursor-pointer"
+                            className="inline-flex items-center gap-1 text-xs text-white font-bold px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 transition shrink-0 cursor-pointer"
                           >
                             <span>Take action</span>
                             <ChevronRight className="w-4 h-4" />
                           </button>
                         </div>
 
-                        <button
+                        <button aria-label="Delete notification"
                           onClick={(e) => handleRemoveNotification(notif.id, e)}
                           className="p-1.5 text-rose-500 hover:text-rose-700 bg-rose-50 hover:bg-rose-100/80 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 rounded-xl border border-rose-200/60 dark:border-rose-800/60 transition-colors cursor-pointer shrink-0"
                           title="Delete notification"
@@ -996,7 +996,7 @@ export const NotificationsCenterView: React.FC<NotificationsCenterViewProps> = (
           onClick={(e) => e.stopPropagation()}
           onTouchStart={(e) => e.stopPropagation()}
         >
-          <div className="bg-slate-900/95 dark:bg-slate-950/95 text-white rounded-xl px-4 py-3 shadow-[0_10px_40px_rgba(0,0,0,0.5)] border border-slate-700/80 backdrop-blur-md flex items-center justify-between gap-3 ring-2 ring-indigo-500/40">
+          <div className="bg-slate-900/95 dark:bg-slate-950/95 text-white rounded-xl px-4 py-3 shadow-[0_10px_40px_rgba(0,0,0,0.5)] border border-slate-700/80 flex items-center justify-between gap-3 ring-2 ring-indigo-500/40">
             <div className="flex items-center gap-3 min-w-0 flex-1">
               <Trash2 className="w-4 h-4 shrink-0 text-slate-400 dark:text-slate-500" aria-hidden="true" />
 
@@ -1019,13 +1019,13 @@ export const NotificationsCenterView: React.FC<NotificationsCenterViewProps> = (
               <button
                 type="button"
                 onClick={handleUndoDelete}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white text-xs font-bold transition-all cursor-pointer transform touch-manipulation select-none"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white text-xs font-bold transition cursor-pointer transform touch-manipulation select-none"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span>Undo</span>
               </button>
 
-              <button
+              <button aria-label="Dismiss"
                 type="button"
                 onClick={handleDismissUndoToast}
                 className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer touch-manipulation"
@@ -1083,15 +1083,15 @@ const TestEmailModal: React.FC<TestEmailModalProps> = ({
 
   return (
     <div
-      className={`fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm ${backdropClass}`}
+      className={`fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-950/60 ${backdropClass}`}
     >
-      <div className={`bg-white dark:bg-slate-900 rounded-xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4 ${cardClass}`}>
+      <div className={`bg-white dark:bg-slate-900 rounded-xl max-w-md w-full p-6 shadow-xl border border-slate-200 dark:border-slate-800 space-y-4 ${cardClass}`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
             <Send className="w-5 h-5" />
             <h3 className="text-base font-bold text-slate-900 dark:text-white">Send SMTP verification email</h3>
           </div>
-          <button
+          <button aria-label="Close"
             onClick={handleClose}
             className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer"
           >

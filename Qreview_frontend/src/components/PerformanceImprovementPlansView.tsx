@@ -205,7 +205,7 @@ export const PerformanceImprovementPlansView: React.FC<PerformanceImprovementPla
             </button>
           ))}
         </div>
-        <button
+        <button aria-label="Refresh"
           onClick={() => {
             setIsLoading(true);
             loadPlans();

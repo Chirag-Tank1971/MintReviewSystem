@@ -149,9 +149,9 @@ export const BatchGenerateReviewsModal: React.FC<BatchGenerateReviewsModalProps>
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[9990] flex items-center justify-center bg-slate-900/50 dark:bg-black/70 backdrop-blur-xs p-4 ${backdropClass}`}
+      className={`fixed inset-0 z-[9990] flex items-center justify-center bg-slate-900/50 dark:bg-black/70 p-4 ${backdropClass}`}
     >
-      <div className={`bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-xl max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden ${cardClass}`}>
+      <div className={`bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 w-full max-w-xl max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden ${cardClass}`}>
         
         {/* HEADER */}
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/80 dark:bg-slate-800/80">
@@ -162,7 +162,7 @@ export const BatchGenerateReviewsModal: React.FC<BatchGenerateReviewsModalProps>
               <p className="text-xs text-slate-500 dark:text-slate-400">Generate review sheets & freeze immutable KRA snapshots</p>
             </div>
           </div>
-          <button
+          <button aria-label="Close"
             onClick={handleClose}
             className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
           >

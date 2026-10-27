@@ -232,7 +232,7 @@ export const SalesChampsReportModal: React.FC<Props> = ({ report, employees, dep
 
   return createPortal(
     <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${backdropClass}`}>
-      <div className={`relative w-full max-w-3xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 flex flex-col max-h-[90vh] ${cardClass}`}>
+      <div className={`relative w-full max-w-3xl bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 flex flex-col max-h-[90vh] ${cardClass}`}>
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-[#0d3b5e] to-[#1d4ed8] rounded-t-2xl">
@@ -420,12 +420,12 @@ export const SalesChampsReportModal: React.FC<Props> = ({ report, employees, dep
                       value={targetNumber}
                       onChange={(e) => setTargetNumber(e.target.value)}
                       placeholder="e.g. 0.96"
-                      className="flex-1 min-w-0 text-sm py-2 px-2 bg-transparent text-slate-900 dark:text-white focus:outline-none"
+                      className="flex-1 min-w-0 text-sm py-2 px-2 bg-transparent text-slate-900 dark:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                     />
                     <select
                       value={targetUnit}
                       onChange={(e) => setTargetUnit(e.target.value as any)}
-                      className="text-xs font-semibold border-l border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/60 text-slate-700 dark:text-slate-200 py-2.5 px-3 focus:outline-none cursor-pointer"
+                      className="text-xs font-semibold border-l border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/60 text-slate-700 dark:text-slate-200 py-2.5 px-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 cursor-pointer"
                     >
                       <option value="Cr">Cr</option>
                       <option value="Lacs">Lacs</option>

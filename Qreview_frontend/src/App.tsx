@@ -22,7 +22,6 @@ import { ReviewViewConfig } from './components/QuarterlyReviewView';
 import { AppraisalViewConfig } from './components/AppraisalManagementView';
 import { ReportsViewConfig } from './components/ReportsCenterView';
 import { PageLoadingProgress } from './components/ui/PageLoadingProgress';
-import { PageTransition } from './components/ui/PageTransition';
 
 // Route-level code splitting: Lazy load heavy domain views
 const DashboardView = lazy(() =>
@@ -200,7 +199,9 @@ function AppContent() {
   }
 
   return (
-    <div className="h-screen overflow-hidden bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans selection:bg-indigo-600 selection:text-white">
+    <div className="h-dvh overflow-hidden bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans selection:bg-indigo-600 selection:text-white">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-2 focus:rounded-md focus:bg-white focus:text-slate-900 focus:ring-2 focus:ring-indigo-500">Skip to content</a>
+
       {/* Universal GPU-Accelerated Page Loading Bar */}
       <PageLoadingProgress active={isViewPending} />
 
@@ -235,7 +236,7 @@ function AppContent() {
 
         <div className="flex flex-col flex-1 min-w-0 h-full overflow-y-auto overflow-x-hidden scroll-smooth">
           {/* Main Content Area - Full width enterprise canvas */}
-          <main className="flex-1 w-full pl-2 sm:pl-3 pr-4 sm:pr-6 lg:pr-8 pt-4 pb-20 md:pb-10">
+          <main id="main-content" tabIndex={-1} className="flex-1 w-full focus:outline-none pl-2 sm:pl-3 pr-4 sm:pr-6 lg:pr-8 pt-4 pb-20 md:pb-10">
           {/* Notifications Return-to-Workspace Bar */}
           {currentView === 'notifications' && (
             <div className="mb-4">
@@ -253,7 +254,7 @@ function AppContent() {
           {/* Lazy loaded domain view with fallback */}
           <ErrorBoundary>
             <Suspense fallback={<ViewSkeletonFallback />}>
-              <PageTransition viewKey={currentView}>
+              <>
                 {currentView === 'dashboard' && user?.role !== 'MANAGEMENT' ? (
                   <DashboardView
                     onNavigate={(view, params) => handleNavigate(view, params)}
@@ -408,7 +409,7 @@ function AppContent() {
                     initialConfig={dashboardConfig}
                   />
                 )}
-              </PageTransition>
+              </>
             </Suspense>
           </ErrorBoundary>
           </main>

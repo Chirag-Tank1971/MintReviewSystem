@@ -201,9 +201,9 @@ export const CreatePipModal: React.FC<CreatePipModalProps> = ({
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[9994] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 ${backdropClass}`}
+      className={`fixed inset-0 z-[9994] bg-slate-900/60 flex items-center justify-center p-3 sm:p-4 ${backdropClass}`}
     >
-      <div className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl w-full max-w-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col ${cardClass}`}>
+      <div className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl w-full max-w-2xl shadow-xl overflow-hidden max-h-[90vh] flex flex-col ${cardClass}`}>
         <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800 shrink-0">
           <div className="flex items-center gap-3">
             <ClipboardList className="w-5 h-5 shrink-0 text-slate-400 dark:text-slate-500" aria-hidden="true" />
@@ -214,7 +214,7 @@ export const CreatePipModal: React.FC<CreatePipModalProps> = ({
               </p>
             </div>
           </div>
-          <button
+          <button aria-label="Close"
             type="button"
             onClick={handleClose}
             disabled={!!isSubmitting}
@@ -386,7 +386,7 @@ export const CreatePipModal: React.FC<CreatePipModalProps> = ({
                     </div>
                   </div>
                   {goals.length > 1 && (
-                    <button
+                    <button aria-label="Remove goal"
                       type="button"
                       onClick={() => handleRemoveGoal(goal.id)}
                       className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer mt-1"

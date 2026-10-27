@@ -225,7 +225,7 @@ export const InitiateReviewModal: React.FC<InitiateReviewModalProps> = ({
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs ${backdropClass}`}
+      className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 ${backdropClass}`}
     >
       <div className={`relative w-full max-w-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl overflow-hidden max-h-[90vh] flex flex-col ${cardClass}`}>
         {/* Modal Header */}
@@ -241,7 +241,7 @@ export const InitiateReviewModal: React.FC<InitiateReviewModalProps> = ({
               </p>
             </div>
           </div>
-          <button
+          <button aria-label="Close"
             type="button"
             onClick={handleClose}
             className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"

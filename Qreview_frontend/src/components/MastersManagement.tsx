@@ -425,7 +425,7 @@ export const MastersManagement: React.FC<MastersManagementProps> = ({
                     <div className="space-y-3">
                       <div className="flex justify-between items-center pb-1 border-b border-slate-100 dark:border-slate-800">
                         <span className="font-bold text-slate-900 dark:text-white text-xs">Edit Department: {d.name}</span>
-                        <button
+                        <button aria-label="Cancel editing"
                           onClick={() => setEditingDeptId(null)}
                           className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
                         >
@@ -510,7 +510,7 @@ export const MastersManagement: React.FC<MastersManagementProps> = ({
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <button
+                        <button aria-label="Edit Department & Budget Cap"
                           onClick={() => {
                             setEditingDeptId(d.id);
                             setEditDeptData({
@@ -525,7 +525,7 @@ export const MastersManagement: React.FC<MastersManagementProps> = ({
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
-                        <button
+                        <button aria-label="Delete Department from Database"
                           onClick={() => promptDeleteDepartment(d)}
                           className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
                           title="Delete Department from Database"
@@ -652,7 +652,7 @@ export const MastersManagement: React.FC<MastersManagementProps> = ({
                     <span className="text-[11px] px-2 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 font-medium">
                       Role Tier {des.level}
                     </span>
-                    <button
+                    <button aria-label="Delete Designation from Database"
                       onClick={() => promptDeleteDesignation(des)}
                       className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
                       title="Delete Designation from Database"
@@ -711,7 +711,7 @@ export const MastersManagement: React.FC<MastersManagementProps> = ({
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
                       <span className="font-bold text-slate-900 dark:text-white text-xs">Edit Cycle {cycle.code}</span>
-                      <button onClick={() => setEditingCycleId(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer">
+                      <button aria-label="Close" onClick={() => setEditingCycleId(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer">
                         <X className="w-4 h-4" />
                       </button>
                     </div>
@@ -754,7 +754,7 @@ export const MastersManagement: React.FC<MastersManagementProps> = ({
                           <span className="font-bold text-slate-900 dark:text-white text-sm truncate">{cycle.name}</span>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
-                          <button
+                          <button aria-label="Edit Cycle"
                             onClick={() => {
                               setEditingCycleId(cycle.id);
                               setEditCycleData({ name: cycle.name, appraisalMonth: cycle.appraisalMonth, description: cycle.description || '' });
@@ -937,7 +937,7 @@ export const MastersManagement: React.FC<MastersManagementProps> = ({
                         </span>
 
                         {isHRorAdmin && (
-                          <button
+                          <button aria-label={hasEmployees ? "Cannot delete: employees assigned" : "Delete location from database"}
                             type="button"
                             onClick={() => promptDeleteLocation(loc)}
                             className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
@@ -1027,10 +1027,10 @@ const CycleEnrolledModal: React.FC<CycleEnrolledModalProps> = ({
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[9990] bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto ${backdropClass}`}
+      className={`fixed inset-0 z-[9990] bg-slate-900/50 flex items-center justify-center p-4 overflow-y-auto ${backdropClass}`}
     >
       <div
-        className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl max-w-2xl w-full max-h-[85vh] my-auto flex flex-col overflow-hidden ${cardClass}`}
+        className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl max-w-2xl w-full max-h-[85vh] my-auto flex flex-col overflow-hidden ${cardClass}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
@@ -1059,7 +1059,7 @@ const CycleEnrolledModal: React.FC<CycleEnrolledModalProps> = ({
               </p>
             </div>
           </div>
-          <button
+          <button aria-label="Close"
             onClick={handleClose}
             className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             title="Close"

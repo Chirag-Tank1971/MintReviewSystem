@@ -948,7 +948,7 @@ export const ManagementDashboardView: React.FC<ManagementDashboardViewProps> = (
                 <select
                   value={deptSortBy}
                   onChange={(e) => setDeptSortBy(e.target.value)}
-                  className="text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-800 dark:text-slate-200 focus:outline-none"
+                  className="text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-800 dark:text-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                 >
                   <option value="averageScore">Average rating</option>
                   <option value="completionRate">Completion rate</option>
@@ -1826,10 +1826,10 @@ const EmployeeDossierModal: React.FC<EmployeeDossierModalProps> = ({
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[9990] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-2 sm:p-4 overflow-y-auto ${backdropClass}`}
+      className={`fixed inset-0 z-[9990] flex items-center justify-center bg-slate-900/60 p-2 sm:p-4 overflow-y-auto ${backdropClass}`}
     >
       <div
-        className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden my-auto ${cardClass}`}
+        className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-xl overflow-hidden my-auto ${cardClass}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
@@ -1853,7 +1853,7 @@ const EmployeeDossierModal: React.FC<EmployeeDossierModalProps> = ({
             </div>
           </div>
 
-          <button
+          <button aria-label="Close"
             onClick={handleClose}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
           >
@@ -2057,10 +2057,10 @@ const DepartmentInspectionModal: React.FC<DepartmentInspectionModalProps> = ({
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[9990] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-2 sm:p-4 overflow-y-auto ${backdropClass}`}
+      className={`fixed inset-0 z-[9990] flex items-center justify-center bg-slate-900/60 p-2 sm:p-4 overflow-y-auto ${backdropClass}`}
     >
       <div
-        className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden my-auto ${cardClass}`}
+        className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-xl overflow-hidden my-auto ${cardClass}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
@@ -2075,7 +2075,7 @@ const DepartmentInspectionModal: React.FC<DepartmentInspectionModalProps> = ({
             </p>
           </div>
 
-          <button
+          <button aria-label="Close"
             onClick={handleClose}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
           >

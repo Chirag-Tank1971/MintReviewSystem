@@ -277,9 +277,9 @@ export const BatchLetterExportModal: React.FC<BatchLetterExportModalProps> = ({
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[9990] overflow-y-auto bg-slate-950/70 dark:bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 ${backdropClass}`}
+      className={`fixed inset-0 z-[9990] overflow-y-auto bg-slate-950/70 dark:bg-black/80 flex items-center justify-center p-4 ${backdropClass}`}
     >
-      <div className={`bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-4xl w-full overflow-hidden border border-slate-200 dark:border-slate-800 my-auto ${cardClass}`}>
+      <div className={`bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-4xl w-full overflow-hidden border border-slate-200 dark:border-slate-800 my-auto ${cardClass}`}>
         {/* Header */}
         <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
           <div className="flex items-center gap-2.5">
@@ -299,7 +299,7 @@ export const BatchLetterExportModal: React.FC<BatchLetterExportModalProps> = ({
             </div>
           </div>
 
-          <button
+          <button aria-label="Close"
             type="button"
             disabled={isExportingZip}
             onClick={handleClose}

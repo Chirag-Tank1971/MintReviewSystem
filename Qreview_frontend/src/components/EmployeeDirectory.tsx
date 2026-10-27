@@ -363,7 +363,7 @@ export const EmployeeDirectory: React.FC<EmployeeDirectoryProps> = ({
                 className="w-full h-9 pl-9 pr-8 text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors"
               />
               {searchQuery && (
-                <button
+                <button aria-label="Clear search"
                   onClick={() => setSearchQuery('')}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs p-0.5 cursor-pointer"
                   title="Clear search"
@@ -444,7 +444,7 @@ export const EmployeeDirectory: React.FC<EmployeeDirectoryProps> = ({
               <div className="h-5 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block mx-0.5" />
 
               {/* Refresh button */}
-              <button
+              <button aria-label="Refresh Directory"
                 onClick={loadData}
                 title="Refresh Directory"
                 className="h-9 w-9 flex items-center justify-center rounded-lg bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer"
@@ -545,7 +545,7 @@ export const EmployeeDirectory: React.FC<EmployeeDirectoryProps> = ({
                             </div>
                           )}
                           <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                            <span>Manager: <strong className="text-slate-700 dark:text-slate-300">{emp.managerName || 'None'}</strong></span>
+                            <span>Manager: <strong className="text-slate-700 dark:text-slate-300">{emp.reportsDirectlyToHod ? 'Reports to HOD' : emp.managerName || 'None'}</strong></span>
                           </div>
                         </div>
                       </div>
@@ -605,7 +605,7 @@ export const EmployeeDirectory: React.FC<EmployeeDirectoryProps> = ({
                               <Edit2 className="w-3 h-3" /> Edit
                             </button>
                             {isAdmin && emp.status !== 'INACTIVE' && !emp.isPastEmployee && (
-                              <button
+                              <button aria-label="Delete employee data & archive as past employee (Admin Only)"
                                 onClick={() => setEmployeeToDelete(emp)}
                                 className="p-1.5 px-2 rounded-lg text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 transition-colors cursor-pointer"
                                 title="Delete employee data & archive as past employee (Admin Only)"
@@ -625,7 +625,7 @@ export const EmployeeDirectory: React.FC<EmployeeDirectoryProps> = ({
             <div className="bg-white dark:bg-[#121215] border border-slate-200/80 dark:border-white/[0.08] rounded-xl overflow-hidden shadow-[0_1px_3px_0_rgba(0,0,0,0.04)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.4)]">
               <div className="overflow-x-auto overscroll-x-contain max-h-[70vh]" style={{ WebkitOverflowScrolling: 'touch' }}>
                 <table className="w-full text-left border-collapse text-xs">
-                  <thead className="sticky top-0 z-10 backdrop-blur-md bg-slate-50/95 dark:bg-[#18181d]/95 border-b border-slate-200/80 dark:border-white/[0.06]">
+                  <thead className="sticky top-0 z-10 bg-slate-50/95 dark:bg-[#18181d]/95 border-b border-slate-200/80 dark:border-white/[0.06]">
                     <tr className="text-slate-600 dark:text-slate-300 font-semibold text-[11px]">
                       <th className="px-4 py-3">Employee</th>
                       <th className="px-3 py-3">Department & role</th>
@@ -717,7 +717,7 @@ export const EmployeeDirectory: React.FC<EmployeeDirectoryProps> = ({
                               <div className="text-[11px] text-slate-700 dark:text-slate-300">
                                 <span className="text-slate-400 dark:text-slate-500">Manager:</span>{' '}
                                 <span className="font-semibold text-slate-900 dark:text-white">
-                                  {emp.managerName || 'Direct'}
+                                  {emp.reportsDirectlyToHod ? 'Reports to HOD' : emp.managerName || 'Direct'}
                                 </span>
                               </div>
                               <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
@@ -795,7 +795,7 @@ export const EmployeeDirectory: React.FC<EmployeeDirectoryProps> = ({
                                       <UserCheck className="w-3 h-3" /> Rehire
                                     </button>
                                   )}
-                                  <button
+                                  <button aria-label="Edit employee & cycle assignment"
                                     onClick={() => {
                                       setEditingEmployee(emp);
                                       setIsRehireInitial(false);
@@ -807,7 +807,7 @@ export const EmployeeDirectory: React.FC<EmployeeDirectoryProps> = ({
                                     <Edit2 className="w-3.5 h-3.5" />
                                   </button>
                                   {isAdmin && emp.status !== 'INACTIVE' && !emp.isPastEmployee && (
-                                    <button
+                                    <button aria-label="Delete employee data & archive as past employee (Admin Only)"
                                       onClick={() => setEmployeeToDelete(emp)}
                                       className="p-1.5 rounded-lg text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
                                       title="Delete employee data & archive as past employee (Admin Only)"
@@ -988,10 +988,10 @@ const EmployeeDeleteModal: React.FC<EmployeeDeleteModalProps> = ({
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[9990] bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto ${backdropClass}`}
+      className={`fixed inset-0 z-[9990] bg-slate-900/50 flex items-center justify-center p-4 overflow-y-auto ${backdropClass}`}
     >
       <div
-        className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl max-w-lg w-full my-auto overflow-hidden ${cardClass}`}
+        className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl max-w-lg w-full my-auto overflow-hidden ${cardClass}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
@@ -1009,7 +1009,7 @@ const EmployeeDeleteModal: React.FC<EmployeeDeleteModalProps> = ({
               </p>
             </div>
           </div>
-          <button
+          <button aria-label="Close"
             onClick={() => !loading && handleClose()}
             className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             title="Close"

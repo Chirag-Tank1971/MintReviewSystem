@@ -94,9 +94,9 @@ export const ReviewLetterModal: React.FC<ReviewLetterModalProps> = ({ review, is
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[9997] overflow-y-auto bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 ${backdropClass}`}
+      className={`fixed inset-0 z-[9997] overflow-y-auto bg-slate-950/70 flex items-center justify-center p-4 ${backdropClass}`}
     >
-      <div className={`bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-3xl w-full overflow-hidden border border-slate-200 dark:border-slate-800 my-auto flex flex-col max-h-[92vh] ${cardClass}`}>
+      <div className={`bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-3xl w-full overflow-hidden border border-slate-200 dark:border-slate-800 my-auto flex flex-col max-h-[92vh] ${cardClass}`}>
         {/* Toolbar */}
         <div className="px-6 py-3.5 bg-slate-900 text-white flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 shadow-md shrink-0">
           <div className="flex items-center gap-2">
@@ -147,7 +147,7 @@ export const ReviewLetterModal: React.FC<ReviewLetterModalProps> = ({ review, is
               <span>Print</span>
             </button>
 
-            <button
+            <button aria-label="Close Letter"
               type="button"
               onClick={handleClose}
               className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition-colors border border-slate-700 cursor-pointer"

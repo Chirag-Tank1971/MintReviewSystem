@@ -362,8 +362,8 @@ export const AppraisalManagementView: React.FC<AppraisalManagementViewProps> = (
         );
       case 'HOD_CALIBRATED':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-purple-50 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60">
-            <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-teal-50 dark:bg-teal-950/60 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800/60">
+            <span className="w-1.5 h-1.5 rounded-full bg-teal-500" />
             <span>HOD calibrated</span>
           </span>
         );
@@ -907,7 +907,7 @@ export const AppraisalManagementView: React.FC<AppraisalManagementViewProps> = (
                             )}
                           </button>
 
-                          <button
+                          <button aria-label="View Appraisal Letterhead Document"
                             type="button"
                             onClick={() => setSelectedAppraisalForLetter(appr)}
                             className="p-2 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800 rounded-xl transition-colors cursor-pointer"
@@ -950,13 +950,12 @@ export const AppraisalManagementView: React.FC<AppraisalManagementViewProps> = (
         ) : (
           <div className="overflow-x-auto overscroll-x-contain max-h-[70vh]" style={{ WebkitOverflowScrolling: 'touch' }}>
             <table className="w-full text-left text-xs">
-              <thead className="sticky top-0 z-10 backdrop-blur-md bg-slate-50/95 dark:bg-[#18181d]/95 border-b border-slate-200/80 dark:border-white/[0.06]">
+              <thead className="sticky top-0 z-10 bg-slate-50/95 dark:bg-[#18181d]/95 border-b border-slate-200/80 dark:border-white/[0.06]">
                 <tr className="text-slate-600 dark:text-slate-300 font-semibold">
                   <th className="py-3.5 px-4">Employee</th>
                   <th className="py-3.5 px-3">Cycle</th>
                   <th className="py-3.5 px-3 text-center">4-Qtr Rolling Score</th>
                   <th className="py-3.5 px-3">Rating band</th>
-                  <th className="py-3.5 px-3 text-right">Current CTC</th>
                   <th className="py-3.5 px-3 text-right">Increment %</th>
                   <th className="py-3.5 px-3 text-right">Revised CTC</th>
                   <th className="py-3.5 px-3 text-center">Workflow stage</th>
@@ -1038,11 +1037,6 @@ export const AppraisalManagementView: React.FC<AppraisalManagementViewProps> = (
                         </div>
                       </td>
 
-                      {/* Current CTC */}
-                      <td className="py-3.5 px-3 text-right tabular-nums text-slate-600 dark:text-slate-300">
-                        {appr.currency || '₹'}{currentCtc.toLocaleString()}
-                      </td>
-
                       {/* Increment % */}
                       <td className="py-3.5 px-3 text-right">
                         {incPct > 0 ? (
@@ -1057,8 +1051,13 @@ export const AppraisalManagementView: React.FC<AppraisalManagementViewProps> = (
                       </td>
 
                       {/* Revised CTC */}
-                      <td className="py-3.5 px-3 text-right tabular-nums font-bold text-slate-900 dark:text-white">
-                        {appr.currency || '₹'}{revisedCtc.toLocaleString()}
+                      <td className="py-3.5 px-3 text-right tabular-nums whitespace-nowrap">
+                        <div className="font-bold text-slate-900 dark:text-white">
+                          {appr.currency || '₹'}{revisedCtc.toLocaleString()}
+                        </div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                          from {appr.currency || '₹'}{currentCtc.toLocaleString()}
+                        </div>
                       </td>
 
                       {/* Workflow Stage */}
@@ -1087,7 +1086,7 @@ export const AppraisalManagementView: React.FC<AppraisalManagementViewProps> = (
                               </button>
 
                               {/* View Full Letter Modal */}
-                              <button
+                              <button aria-label="View Appraisal Letterhead Document"
                                 type="button"
                                 onClick={() => setSelectedAppraisalForLetter(appr)}
                                 className="p-1.5 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg transition-colors"

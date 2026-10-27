@@ -406,7 +406,16 @@
   animation: modalCardScaleIn 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* Accessibility: Honour prefers-reduced-motion by strictly disabling transforms & animations */
+/* iOS zooms the page when a focused field is under 16px */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* Accessibility: honour prefers-reduced-motion by disabling animations and transitions */
 @media (prefers-reduced-motion: reduce) {
   *,
   ::before,
@@ -415,7 +424,6 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
-    transform: none !important;
   }
 
   .shimmer-effect::after {

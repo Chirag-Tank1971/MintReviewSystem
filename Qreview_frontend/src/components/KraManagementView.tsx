@@ -424,7 +424,7 @@ export const KraManagementView: React.FC<KraManagementViewProps> = ({
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="sticky top-0 z-10 backdrop-blur-md bg-slate-50/95 dark:bg-[#18181d]/95 text-slate-600 dark:text-slate-300 border-b border-slate-200/80 dark:border-white/[0.06] font-semibold text-[11px]">
+              <thead className="sticky top-0 z-10 bg-slate-50/95 dark:bg-[#18181d]/95 text-slate-600 dark:text-slate-300 border-b border-slate-200/80 dark:border-white/[0.06] font-semibold text-[11px]">
                 <tr>
                   <th className="py-3 px-4">Employee</th>
                   <th className="py-3 px-4">Department & designation</th>

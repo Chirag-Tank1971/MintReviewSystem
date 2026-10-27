@@ -405,9 +405,9 @@ export const AppraisalDetailModal: React.FC<AppraisalDetailModalProps> = ({
   return createPortal(
     <>
       <div
-        className={`fixed inset-0 z-[9990] overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 ${backdropClass}`}
+        className={`fixed inset-0 z-[9990] overflow-y-auto bg-slate-900/60 flex items-center justify-center p-4 ${backdropClass}`}
       >
-        <div className={`bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-4xl w-full overflow-hidden border border-slate-200 dark:border-slate-800 max-h-[92vh] flex flex-col ${cardClass}`}>
+        <div className={`bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-4xl w-full overflow-hidden border border-slate-200 dark:border-slate-800 max-h-[92vh] flex flex-col ${cardClass}`}>
           {/* Header */}
           <div className="px-4 sm:px-6 py-4 bg-white dark:bg-slate-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 border-b border-slate-200 dark:border-slate-800">
             <div className="flex items-center gap-3 min-w-0">
@@ -1291,9 +1291,9 @@ export const AppraisalDetailModal: React.FC<AppraisalDetailModalProps> = ({
       {confirmActionType &&
         createPortal(
           <div
-            className="fixed inset-0 z-[10000] overflow-y-auto bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4 modal-backdrop-enter"
+            className="fixed inset-0 z-[10000] overflow-y-auto bg-slate-950/75 flex items-center justify-center p-4 modal-backdrop-enter"
           >
-            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 dark:border-slate-800 modal-card-enter">
+            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-lg w-full overflow-hidden border border-slate-200 dark:border-slate-800 modal-card-enter">
               {confirmActionType === 'HOD_RETURN' ? (
                 <div className="p-6 space-y-4">
                   <div className="flex items-center gap-3">

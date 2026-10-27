@@ -773,10 +773,10 @@ export const ReviewScoringModal: React.FC<ReviewScoringModalProps> = ({
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[9990] flex items-center justify-center bg-slate-900/50 dark:bg-slate-950/80 backdrop-blur-xs p-4 overflow-y-auto ${backdropClass}`}
+      className={`fixed inset-0 z-[9990] flex items-center justify-center bg-slate-900/50 dark:bg-slate-950/80 p-4 overflow-y-auto ${backdropClass}`}
     >
       {/* Side-rail layout: who / status / steps / score / actions on the left; KRAs get the full height on the right */}
-      <div className={`bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-7xl flex flex-col md:flex-row h-[calc(100dvh-2rem)] overflow-clip text-slate-900 dark:text-white ${cardClass}`}>
+      <div className={`bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 w-full max-w-7xl flex flex-col md:flex-row h-[calc(100dvh-2rem)] overflow-clip text-slate-900 dark:text-white ${cardClass}`}>
         <aside className="md:w-80 shrink-0 flex flex-col max-h-[45%] md:max-h-none border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-850">
         <div className="flex-1 min-h-0 overflow-y-auto">
 
@@ -808,7 +808,7 @@ export const ReviewScoringModal: React.FC<ReviewScoringModalProps> = ({
                   </span>
                 )}
                 {review.reviewType === 'PIP_FINAL' && (
-                  <span className="inline-flex items-center space-x-1 text-xs px-2.5 py-0.5 rounded-full font-medium bg-purple-100 dark:bg-purple-950/50 text-purple-900 dark:text-purple-200 border border-purple-300 dark:border-purple-800">
+                  <span className="inline-flex items-center space-x-1 text-xs px-2.5 py-0.5 rounded-full font-medium bg-teal-100 dark:bg-teal-950/50 text-teal-900 dark:text-teal-200 border border-teal-300 dark:border-teal-800">
                     <span>PIP Final Evaluation</span>
                   </span>
                 )}
@@ -1094,16 +1094,16 @@ export const ReviewScoringModal: React.FC<ReviewScoringModalProps> = ({
                   }`}
                 >
                   <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold ${
-                    wizardStep === 3 ? 'bg-violet-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                    wizardStep === 3 ? 'bg-teal-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
                   }`}>
                     3
                   </span>
                   <span>HOD scoring</span>
-                  <span className="text-[11px] tabular-nums font-bold text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/50 px-1.5 py-0.2 rounded-md border border-violet-200 dark:border-violet-800">
+                  <span className="text-[11px] tabular-nums font-bold text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/50 px-1.5 py-0.2 rounded-md border border-teal-200 dark:border-teal-800">
                     {computedHodScore.toFixed(2)}
                   </span>
                   {missingHodJustifications > 0 && (
-                    <span className="px-1.5 py-0.5 rounded-full text-[11px] font-bold bg-violet-100 dark:bg-violet-950/60 text-violet-800 dark:text-violet-300 border border-violet-300 dark:border-violet-800 flex items-center gap-1">
+                    <span className="px-1.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 flex items-center gap-1">
                       <span>{missingHodJustifications} justification{missingHodJustifications > 1 ? 's' : ''} needed</span>
                     </span>
                   )}
@@ -1600,9 +1600,9 @@ export const ReviewScoringModal: React.FC<ReviewScoringModalProps> = ({
         {/* UNSAVED CHANGES CONFIRMATION ALERT */}
         {showUnsavedAlert && (
           <div
-            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 modal-backdrop-enter"
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 p-4 modal-backdrop-enter"
           >
-            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-800 max-w-md w-full p-6 text-slate-900 dark:text-white modal-card-enter">
+            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 max-w-md w-full p-6 text-slate-900 dark:text-white modal-card-enter">
               <div className="flex items-start space-x-4">
                 <div className="p-3 bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-xl border border-amber-500/20 shrink-0">
                   <AlertTriangle className="w-6 h-6" />

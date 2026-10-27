@@ -210,9 +210,9 @@ export const KraTemplateBuilderModal: React.FC<KraTemplateBuilderModalProps> = (
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[9990] flex items-center justify-center bg-slate-900/40 dark:bg-black/70 backdrop-blur-xs p-4 ${backdropClass}`}
+      className={`fixed inset-0 z-[9990] flex items-center justify-center bg-slate-900/40 dark:bg-black/70 p-4 ${backdropClass}`}
     >
-      <div className={`bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-800 max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden ${cardClass}`}>
+      <div className={`bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden ${cardClass}`}>
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/60">
           <div className="flex items-center gap-3">
@@ -510,7 +510,7 @@ export const KraTemplateBuilderModal: React.FC<KraTemplateBuilderModalProps> = (
                       </div>
                     </div>
 
-                    <button
+                    <button aria-label="Remove KRA item"
                       type="button"
                       onClick={() => handleRemoveItem(idx)}
                       className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors mt-1 cursor-pointer"

@@ -241,7 +241,7 @@ export const ReturnReviewModal: React.FC<ReturnReviewModalProps> = ({
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 ${backdropClass}`}
+      className={`fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/60 p-4 ${backdropClass}`}
     >
       <div
         className={`bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 max-w-3xl w-full max-h-[90vh] flex flex-col overflow-clip ${cardClass}`}
@@ -259,7 +259,7 @@ export const ReturnReviewModal: React.FC<ReturnReviewModalProps> = ({
                 : `Select the KRAs that need re-evaluation. Only these will be editable for ${recipientName}; everything else stays locked.`}
             </p>
           </div>
-          <button
+          <button aria-label="Close"
             type="button"
             onClick={handleClose}
             disabled={saving}

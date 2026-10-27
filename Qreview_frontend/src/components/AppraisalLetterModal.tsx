@@ -163,9 +163,9 @@ export const AppraisalLetterModal: React.FC<AppraisalLetterModalProps> = ({ appr
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[9999] overflow-y-auto bg-slate-950/70 dark:bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 print:p-0 print:bg-white ${backdropClass}`}
+      className={`fixed inset-0 z-[9999] overflow-y-auto bg-slate-950/70 dark:bg-black/80 flex items-center justify-center p-4 print:p-0 print:bg-white ${backdropClass}`}
     >
-      <div className={`bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-3xl w-full overflow-hidden border border-slate-200 dark:border-slate-800 print:border-none print:shadow-none print:max-w-none my-auto ${cardClass}`}>
+      <div className={`bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-3xl w-full overflow-hidden border border-slate-200 dark:border-slate-800 print:border-none print:shadow-none print:max-w-none my-auto ${cardClass}`}>
         {/* Modal Toolbar (hidden in print) - sticky */}
         <div className="sticky top-0 z-10 px-6 py-3.5 bg-slate-900 text-white flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 print:hidden shadow-md">
           <div className="flex items-center gap-2">
@@ -224,7 +224,7 @@ export const AppraisalLetterModal: React.FC<AppraisalLetterModalProps> = ({ appr
             </button>
 
             {/* Close Button */}
-            <button
+            <button aria-label="Close Letter"
               type="button"
               onClick={handleClose}
               className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition-colors border border-slate-700 cursor-pointer"

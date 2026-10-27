@@ -131,9 +131,9 @@ export const KraLibraryModal: React.FC<KraLibraryModalProps> = ({
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[9990] flex items-center justify-center bg-slate-900/40 dark:bg-black/70 backdrop-blur-xs p-4 ${backdropClass}`}
+      className={`fixed inset-0 z-[9990] flex items-center justify-center bg-slate-900/40 dark:bg-black/70 p-4 ${backdropClass}`}
     >
-      <div className={`bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-800 max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden ${cardClass}`}>
+      <div className={`bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden ${cardClass}`}>
         {/* Header */}
         <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/60">
           <div className="flex items-center gap-3">
@@ -402,7 +402,7 @@ export const KraLibraryModal: React.FC<KraLibraryModalProps> = ({
                           )}
                         </div>
                         {canEdit && (
-                          <button
+                          <button aria-label="Edit KRA"
                             onClick={() => handleStartEdit(kra)}
                             className="opacity-0 group-hover:opacity-100 text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 p-1 rounded transition-opacity cursor-pointer"
                             title="Edit KRA"

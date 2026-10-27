@@ -77,7 +77,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <TooltipProvider delayDuration={200}>
       <aside
         className={cn(
-          'hidden md:flex flex-col shrink-0 h-full border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 transition-[width] duration-150 z-30 select-none',
+          'hidden md:flex flex-col shrink-0 h-full border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 z-30 select-none',
           isCollapsed ? 'w-14' : 'w-56',
           className
         )}

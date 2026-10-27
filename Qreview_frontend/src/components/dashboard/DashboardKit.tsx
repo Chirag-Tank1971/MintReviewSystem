@@ -451,7 +451,7 @@ export const ProgressListCard: React.FC<{
 export const STAGE_PILL: Record<string, { label: string; cls: string }> = {
   SELF: { label: 'Self-assessment', cls: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' },
   MANAGER: { label: 'With manager', cls: 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300' },
-  HOD: { label: 'With HOD', cls: 'bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300' },
+  HOD: { label: 'With HOD', cls: 'bg-teal-50 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300' },
   HR: { label: 'With HR', cls: 'bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300' },
   CLOSED: { label: 'Completed', cls: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300' },
   NONE: { label: 'Not started', cls: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400' },

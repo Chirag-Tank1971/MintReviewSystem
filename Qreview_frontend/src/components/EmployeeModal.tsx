@@ -999,11 +999,11 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[9990] bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto ${backdropClass}`}
+      className={`fixed inset-0 z-[9990] bg-slate-900/50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto ${backdropClass}`}
     >
       {/* 1. ONBOARDING CREDENTIALS SUCCESS CARD */}
       {createdResponse && createdResponse.provisionedUser ? (
-        <div className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl w-full max-w-lg shadow-2xl overflow-hidden p-6 sm:p-8 text-slate-800 dark:text-slate-200 ${cardClass}`}>
+        <div className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl w-full max-w-lg shadow-xl overflow-hidden p-6 sm:p-8 text-slate-800 dark:text-slate-200 ${cardClass}`}>
           <div className="text-center">
             <div className="w-14 h-14 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-3 shadow-inner">
               <CheckCircle2 className="w-7 h-7" />
@@ -1071,7 +1071,7 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
         </div>
       ) : (
         /* 2. SIMPLE ONE-PAGE EMPLOYEE FORM MODAL */
-        <div className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl w-full max-w-3xl shadow-2xl overflow-hidden text-slate-800 dark:text-slate-200 flex flex-col max-h-[92vh] ${cardClass}`}>
+        <div className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl w-full max-w-3xl shadow-xl overflow-hidden text-slate-800 dark:text-slate-200 flex flex-col max-h-[92vh] ${cardClass}`}>
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/80 shrink-0">
             <div className="flex items-center gap-3">
@@ -1087,7 +1087,7 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
                 </p>
               </div>
             </div>
-            <button
+            <button aria-label="Close"
               type="button"
               onClick={handleClose}
               className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
@@ -2088,7 +2088,7 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
                       disabled={isInactive}
                       value={currency}
                       onChange={(e) => setCurrency(e.target.value)}
-                      className="absolute left-2 bg-transparent text-xs font-bold text-slate-600 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700 pr-1.5 py-1 focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                      className="absolute left-2 bg-transparent text-xs font-bold text-slate-600 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700 pr-1.5 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       <option value="₹">₹ INR</option>
                       <option value="$">$ USD</option>
@@ -2130,7 +2130,7 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
                       onChange={(e) => setProvisionLogin(e.target.checked)}
                       className="sr-only peer"
                     />
-                    <div className="w-10 h-5 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600 peer-disabled:opacity-50 peer-disabled:cursor-not-allowed"></div>
+                    <div className="w-10 h-5 bg-slate-200 dark:bg-slate-700 peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600 peer-disabled:opacity-50 peer-disabled:cursor-not-allowed"></div>
                   </label>
                 </div>
               </div>

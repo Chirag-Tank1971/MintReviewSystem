@@ -37,7 +37,7 @@ const score = (n?: number | null) => (n && n > 0 ? n.toFixed(2) : '–');
 const stageColors = {
   self: 'bg-slate-300 dark:bg-slate-600',
   manager: 'bg-amber-400',
-  hod: 'bg-violet-500',
+  hod: 'bg-teal-500',
   hr: 'bg-sky-500',
   done: 'bg-emerald-500',
 };

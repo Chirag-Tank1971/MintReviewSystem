@@ -753,7 +753,7 @@ export const QuarterlyReviewView: React.FC<QuarterlyReviewViewProps> = ({
     if (review.status === 'HOD_PENDING') {
       return {
         label: 'HOD Review',
-        className: 'bg-violet-50 dark:bg-violet-950/60 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-800/60',
+        className: 'bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-800/60',
       };
     }
     if (review.status === 'MANAGER_COMPLETED') {
@@ -1132,7 +1132,7 @@ export const QuarterlyReviewView: React.FC<QuarterlyReviewViewProps> = ({
                     </span>
                   </div>
                   <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                    <div className="bg-indigo-500 h-1.5 rounded-full transition-all duration-500" style={{ width: `${stageProgress.self.pct}%` }} />
+                    <div className="bg-indigo-500 h-1.5 rounded-full transition-[width] duration-500" style={{ width: `${stageProgress.self.pct}%` }} />
                   </div>
                 </div>
 
@@ -1145,7 +1145,7 @@ export const QuarterlyReviewView: React.FC<QuarterlyReviewViewProps> = ({
                     </span>
                   </div>
                   <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                    <div className="bg-sky-500 h-1.5 rounded-full transition-all duration-500" style={{ width: `${stageProgress.manager.pct}%` }} />
+                    <div className="bg-sky-500 h-1.5 rounded-full transition-[width] duration-500" style={{ width: `${stageProgress.manager.pct}%` }} />
                   </div>
                 </div>
 
@@ -1158,7 +1158,7 @@ export const QuarterlyReviewView: React.FC<QuarterlyReviewViewProps> = ({
                     </span>
                   </div>
                   <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                    <div className="bg-violet-500 h-1.5 rounded-full transition-all duration-500" style={{ width: `${stageProgress.hr.pct}%` }} />
+                    <div className="bg-teal-500 h-1.5 rounded-full transition-[width] duration-500" style={{ width: `${stageProgress.hr.pct}%` }} />
                   </div>
                 </div>
 
@@ -1171,7 +1171,7 @@ export const QuarterlyReviewView: React.FC<QuarterlyReviewViewProps> = ({
                     </span>
                   </div>
                   <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                    <div className="bg-emerald-500 h-1.5 rounded-full transition-all duration-500" style={{ width: `${stageProgress.finalized.pct}%` }} />
+                    <div className="bg-emerald-500 h-1.5 rounded-full transition-[width] duration-500" style={{ width: `${stageProgress.finalized.pct}%` }} />
                   </div>
                 </div>
               </div>
@@ -1351,7 +1351,7 @@ export const QuarterlyReviewView: React.FC<QuarterlyReviewViewProps> = ({
               className="w-full text-xs pl-8 pr-7 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 rounded-lg focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-800 transition-colors"
             />
             {searchQuery && (
-              <button
+              <button aria-label="Clear search"
                 onClick={() => setSearchQuery('')}
                 className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
               >
@@ -1650,7 +1650,7 @@ export const QuarterlyReviewView: React.FC<QuarterlyReviewViewProps> = ({
                 <div
                   key={r.id}
                   onClick={() => (canSelfAssess && !r.isSelfSubmitted ? handleOpenSelfAssess(r) : handleOpenScoring(r))}
-                  className={`bg-white dark:bg-[#18181d] rounded-xl border p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-all duration-150 cursor-pointer flex flex-col justify-between space-y-3 group ${
+                  className={`bg-white dark:bg-[#18181d] rounded-xl border p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition duration-150 cursor-pointer flex flex-col justify-between space-y-3 group ${
                     isPendingMyAction
                       ? 'border-indigo-300 dark:border-indigo-500/60 ring-2 ring-indigo-500/10'
                       : 'border-slate-200/90 dark:border-white/[0.08] hover:border-slate-300 dark:hover:border-white/[0.15]'
@@ -1677,7 +1677,7 @@ export const QuarterlyReviewView: React.FC<QuarterlyReviewViewProps> = ({
                               </span>
                             )}
                             {r.reviewType === 'PIP_FINAL' && (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800 whitespace-nowrap">
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-teal-100 dark:bg-teal-950/60 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800 whitespace-nowrap">
                                 PIP Final
                               </span>
                             )}
@@ -1734,7 +1734,7 @@ export const QuarterlyReviewView: React.FC<QuarterlyReviewViewProps> = ({
 
                       <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1 overflow-hidden">
                         <div
-                          className="h-full rounded-full transition-all duration-300 bg-indigo-500"
+                          className="h-full rounded-full transition-[width] duration-300 bg-indigo-500"
                           style={{
                             width: `${totalKras ? Math.round((scoredKraCount / totalKras) * 100) : 0}%`,
                           }}
@@ -1763,16 +1763,16 @@ export const QuarterlyReviewView: React.FC<QuarterlyReviewViewProps> = ({
                         <button
                           type="button"
                           onClick={() => handleOpenSelfAssess(r)}
-                          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-all cursor-pointer"
+                          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition cursor-pointer"
                         >
                           <Star className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
                           <span>{r.isSelfSubmitted ? 'Edit Self-Assessment' : 'Start Self-Assessment'}</span>
                           <ChevronRight className="w-3 h-3 transition-transform group-hover:translate-x-0.5" />
                         </button>
-                        <button
+                        <button aria-label="Open Sheet / View Details"
                           type="button"
                           onClick={() => handleOpenScoring(r)}
-                          className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
+                          className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition cursor-pointer"
                           title="Open Sheet / View Details"
                         >
                           <Eye className="w-3.5 h-3.5" />
@@ -1781,7 +1781,7 @@ export const QuarterlyReviewView: React.FC<QuarterlyReviewViewProps> = ({
                     ) : (
                       <button
                         onClick={() => handleOpenScoring(r)}
-                        className={`w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                        className={`w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition cursor-pointer ${
                           isPendingMyAction
                             ? 'bg-indigo-600 text-white hover:bg-indigo-700'
                             : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-750 border border-slate-200 dark:border-slate-700'
@@ -1809,7 +1809,7 @@ export const QuarterlyReviewView: React.FC<QuarterlyReviewViewProps> = ({
           /* Table View */
           <div className="overflow-x-auto overscroll-x-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
             <table className="w-full text-left text-xs">
-              <thead className="sticky top-0 z-10 backdrop-blur-md bg-slate-50/95 dark:bg-[#18181d]/95 text-slate-600 dark:text-slate-300 font-semibold border-b border-slate-200/80 dark:border-white/[0.06]">
+              <thead className="sticky top-0 z-10 bg-slate-50/95 dark:bg-[#18181d]/95 text-slate-600 dark:text-slate-300 font-semibold border-b border-slate-200/80 dark:border-white/[0.06]">
                 <tr>
                   <th className="py-2.5 px-3 w-8">
                     <input
@@ -1887,7 +1887,7 @@ export const QuarterlyReviewView: React.FC<QuarterlyReviewViewProps> = ({
                                 </span>
                               )}
                               {r.reviewType === 'PIP_FINAL' && (
-                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800 whitespace-nowrap">
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-teal-100 dark:bg-teal-950/60 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800 whitespace-nowrap">
                                   PIP Final
                                 </span>
                               )}
@@ -2017,7 +2017,7 @@ export const QuarterlyReviewView: React.FC<QuarterlyReviewViewProps> = ({
                           )}
 
                           {/* 3-dot action button */}
-                          <button
+                          <button aria-label="More options"
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -2081,7 +2081,7 @@ export const QuarterlyReviewView: React.FC<QuarterlyReviewViewProps> = ({
 
               {/* Page Buttons */}
               <div className="flex items-center space-x-1">
-                <button
+                <button aria-label="Previous page"
                   disabled={currentPage === 1}
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   className="p-1 rounded-lg border border-slate-200 dark:border-white/[0.08] disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-white/[0.04] cursor-pointer disabled:cursor-not-allowed text-slate-700 dark:text-slate-300"
@@ -2107,7 +2107,7 @@ export const QuarterlyReviewView: React.FC<QuarterlyReviewViewProps> = ({
                     </React.Fragment>
                   ))}
 
-                <button
+                <button aria-label="Next page"
                   disabled={currentPage === totalPages}
                   onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                   className="p-1 rounded-lg border border-slate-200 dark:border-white/[0.08] disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-white/[0.04] cursor-pointer disabled:cursor-not-allowed text-slate-700 dark:text-slate-300"
@@ -2132,7 +2132,7 @@ export const QuarterlyReviewView: React.FC<QuarterlyReviewViewProps> = ({
               right: `${menuAnchor.right}px`,
               zIndex: 99999,
             }}
-            className="w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl py-1 text-xs text-slate-700 dark:text-slate-200 animate-in fade-in zoom-in-95 duration-100"
+            className="w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl py-1 text-xs text-slate-700 dark:text-slate-200 animate-in fade-in zoom-in-95 duration-100"
             onClick={(e) => e.stopPropagation()}
           >
             <button
@@ -2323,9 +2323,9 @@ const PeriodLifecycleModal: React.FC<PeriodLifecycleModalProps> = ({
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-slate-900/60 backdrop-blur-xs ${backdropClass}`}
+      className={`fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-slate-900/60 ${backdropClass}`}
     >
-      <div className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl max-w-2xl w-full shadow-2xl max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden my-auto ${cardClass}`}>
+      <div className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl max-w-2xl w-full shadow-xl max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden my-auto ${cardClass}`}>
         <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-5 pt-5 pb-4 shrink-0">
           <div className="flex items-center space-x-3">
             <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950/50 rounded-xl text-indigo-600 dark:text-indigo-400">
@@ -2356,7 +2356,7 @@ const PeriodLifecycleModal: React.FC<PeriodLifecycleModalProps> = ({
             return (
               <div
                 key={period.id}
-                className={`p-4 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${
+                className={`p-4 rounded-xl border transition flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${
                   period.status === 'ACTIVE'
                     ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800/80'
                     : period.status === 'LOCKED'
