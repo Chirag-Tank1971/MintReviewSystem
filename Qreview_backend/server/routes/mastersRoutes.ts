@@ -1451,11 +1451,11 @@ mastersRouter.put('/employees/:id', requireRoles('SUPER_ADMIN', 'HR'), async (re
     }
 
     if (isDirectToHod) {
-      // Direct reporting to HOD: clear L1 manager fields
+      // Direct reporting to HOD: clear L1 manager fields ('' not undefined: Mongo drops undefined from $set)
       updateData.managerIds = [];
       updateData.managerNames = [];
-      updateData.managerId = undefined;
-      updateData.managerName = undefined;
+      updateData.managerId = '';
+      updateData.managerName = '';
     } else if (managerIds !== undefined) {
       if (!Array.isArray(managerIds)) {
         return res.status(400).json({ error: 'managerIds must be an array.' });
@@ -1479,8 +1479,8 @@ mastersRouter.put('/employees/:id', requireRoles('SUPER_ADMIN', 'HR'), async (re
       }
       updateData.managerIds = cleanManagerIds;
       updateData.managerNames = resolvedNames;
-      updateData.managerId = cleanManagerIds[0] || undefined;
-      updateData.managerName = resolvedNames[0] || undefined;
+      updateData.managerId = cleanManagerIds[0] || '';
+      updateData.managerName = resolvedNames[0] || '';
 
       // Cascade primary manager update to open quarterly reviews & appraisals
       if (updateData.managerId) {
@@ -1520,8 +1520,8 @@ mastersRouter.put('/employees/:id', requireRoles('SUPER_ADMIN', 'HR'), async (re
           { $set: { managerId, managerName: mgr.name } }
         );
       } else {
-        updateData.managerId = undefined;
-        updateData.managerName = undefined;
+        updateData.managerId = '';
+        updateData.managerName = '';
         updateData.managerIds = [];
         updateData.managerNames = [];
       }
@@ -1784,19 +1784,38 @@ mastersRouter.delete('/employees/:id', requireRoles('SUPER_ADMIN'), async (req: 
       await kraTemplatesCol.deleteMany({ id: { $in: ownedTemplates.map((t: any) => t.id) } });
     }
 
-    // 6. Unassign this employee as reporting manager or HOD for any other employees
-    await empCol.updateMany(
-      { managerId: id },
-      { $set: { managerId: undefined, managerName: 'Unassigned' } }
-    );
-    await empCol.updateMany(
-      { hodId: id },
-      { $set: { hodId: undefined, hodName: 'Unassigned' } }
-    );
+    // 6. Unassign this employee as reporting manager (primary or second) or HOD for any
+    // other employees. Clear with '' — Mongo drops undefined values from $set.
+    const affectedReports: Employee[] = await (await empCol.find({
+      id: { $ne: id },
+      $or: [{ managerId: id }, { managerIds: id }, { hodId: id }],
+    })).toArray();
+    for (const report of affectedReports) {
+      const fix: Partial<Employee> = {};
+      if (report.managerId === id || report.managerIds?.includes(id)) {
+        const keptIds: string[] = [];
+        const keptNames: string[] = [];
+        (report.managerIds || []).forEach((mId, idx) => {
+          if (mId && mId !== id) {
+            keptIds.push(mId);
+            keptNames.push(report.managerNames?.[idx] || '');
+          }
+        });
+        fix.managerIds = keptIds;
+        fix.managerNames = keptNames;
+        fix.managerId = keptIds[0] || '';
+        fix.managerName = keptNames[0] || '';
+      }
+      if (report.hodId === id) {
+        fix.hodId = '';
+        fix.hodName = '';
+      }
+      await empCol.updateOne({ id: report.id }, { $set: fix });
+    }
     // Unassign this employee as designated HOD on departments
     await deptCol.updateMany(
       { hodId: id },
-      { $set: { hodId: undefined, hodName: 'Unassigned' } }
+      { $set: { hodId: '', hodName: '' } }
     );
 
     // 7. Update employee record: archive as Past Employee with status INACTIVE
@@ -1811,17 +1830,25 @@ mastersRouter.delete('/employees/:id', requireRoles('SUPER_ADMIN'), async (req: 
           relievingDate: archivedDate,
           hasLoginAccount: false,
           userActive: false,
-          userId: undefined,
-          managerId: undefined,
-          managerName: 'Unassigned',
-          hodId: undefined,
-          hodName: 'Unassigned',
-          currentKraTemplateId: undefined,
-          currentKraTemplateName: undefined,
+          userId: '',
+          managerId: '',
+          managerName: '',
+          managerIds: [],
+          managerNames: [],
+          hodId: '',
+          hodName: '',
+          currentKraTemplateId: '',
+          currentKraTemplateName: '',
           updatedAt: archivedDate,
         },
       }
     );
+
+    // Move the reports' open reviews / appraisals off the removed manager (falls back to HOD)
+    for (const report of affectedReports) {
+      const refreshed = await empCol.findOne({ id: report.id });
+      if (refreshed) await syncEmployeeAppraisalsAndReviews(refreshed);
+    }
 
     // Invalidate auth cache and revoke sessions
     invalidateAuthCache(id);
