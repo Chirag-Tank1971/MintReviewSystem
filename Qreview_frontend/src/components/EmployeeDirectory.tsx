@@ -47,6 +47,10 @@ interface EmployeeDirectoryProps {
   employees?: Employee[];
 }
 
+/** Shared look for the directory toolbar inputs and selects. */
+const FILTER_CONTROL =
+  'h-8 text-xs text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-md hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus:border-indigo-500 transition-colors';
+
 export const EmployeeDirectory: React.FC<EmployeeDirectoryProps> = ({
   onNavigateToHierarchy,
   departments: initialDepartments,
@@ -350,135 +354,115 @@ export const EmployeeDirectory: React.FC<EmployeeDirectoryProps> = ({
             </button>
           </div>
 
-          {/* Controls Bar */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 p-2.5 rounded-xl flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-2.5">
-            {/* Search Input */}
-            <div className="relative flex-1 min-w-[240px] max-w-md">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          {/* Toolbar: search, filters, refresh, view toggle — one compact row */}
+          <div role="toolbar" aria-label="Filter employees" className="flex flex-wrap items-center gap-2">
+            <div className="relative w-full sm:w-64">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true" />
               <input
-                type="text"
+                type="search"
+                aria-label="Search employees"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search name, employee code, email..."
-                className="w-full h-9 pl-9 pr-8 text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                placeholder="Search name, code, email"
+                className={`${FILTER_CONTROL} w-full pl-8 pr-7 placeholder-slate-400`}
               />
               {searchQuery && (
-                <button aria-label="Clear search"
+                <button
+                  aria-label="Clear search"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs p-0.5 cursor-pointer"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer"
                   title="Clear search"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <X className="w-3 h-3" />
                 </button>
               )}
             </div>
 
-            {/* Filter Dropdowns and Actions Cluster */}
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Department Select */}
-              <div className="relative">
+            {[
+              {
+                label: 'Department',
+                value: selectedDept,
+                onChange: setSelectedDept,
+                all: 'All departments',
+                options: departments.map((d) => ({ value: d.id, label: d.name })),
+              },
+              {
+                label: 'Cycle',
+                value: selectedCycle,
+                onChange: setSelectedCycle,
+                all: 'All cycles',
+                options: cycles.filter((c) => c.active !== false).map((c) => ({ value: c.id, label: c.name })),
+              },
+              {
+                label: 'Status',
+                value: selectedStatus,
+                onChange: setSelectedStatus,
+                all: 'All statuses',
+                options: [
+                  { value: 'ACTIVE', label: 'Active' },
+                  { value: 'PROBATION', label: 'Probation' },
+                  { value: 'NOTICE', label: 'Notice' },
+                  { value: 'INACTIVE', label: 'Past employees' },
+                ],
+              },
+            ].map((f) => (
+              <div key={f.label} className="relative">
                 <select
-                  value={selectedDept}
-                  onChange={(e) => setSelectedDept(e.target.value)}
-                  className="h-9 pl-2.5 pr-7 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 appearance-none cursor-pointer"
+                  aria-label={f.label}
+                  value={f.value}
+                  onChange={(e) => f.onChange(e.target.value)}
+                  className={`${FILTER_CONTROL} pl-2.5 pr-7 appearance-none cursor-pointer max-w-[11rem] truncate ${
+                    f.value ? 'border-indigo-300 dark:border-indigo-700 bg-indigo-50/60 dark:bg-indigo-950/30 text-indigo-800 dark:text-indigo-200' : ''
+                  }`}
                 >
-                  <option value="">All departments</option>
-                  {departments.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
+                  <option value="">{f.all}</option>
+                  {f.options.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
                     </option>
                   ))}
                 </select>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true" />
               </div>
+            ))}
 
-              {/* Cycle Select */}
-              <div className="relative">
-                <select
-                  value={selectedCycle}
-                  onChange={(e) => setSelectedCycle(e.target.value)}
-                  className="h-9 pl-2.5 pr-7 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 appearance-none cursor-pointer"
-                >
-                  <option value="">All cycles</option>
-                  {cycles.filter((c) => c.active !== false).map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
-              </div>
+            {hasActiveFilters && (
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedDept('');
+                  setSelectedCycle('');
+                  setSelectedStatus('');
+                }}
+                className="h-8 px-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:underline cursor-pointer"
+              >
+                Clear filters
+              </button>
+            )}
 
-              {/* Status Select */}
-              <div className="relative">
-                <select
-                  value={selectedStatus}
-                  onChange={(e) => setSelectedStatus(e.target.value)}
-                  className="h-9 pl-2.5 pr-7 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 appearance-none cursor-pointer"
-                >
-                  <option value="">All statuses</option>
-                  <option value="ACTIVE">Active</option>
-                  <option value="PROBATION">Probation</option>
-                  <option value="NOTICE">Notice</option>
-                  <option value="INACTIVE">Past employees</option>
-                </select>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
-              </div>
-
-              {/* Clear filters button if active */}
-              {hasActiveFilters && (
-                <button
-                  onClick={() => {
-                    setSearchQuery('');
-                    setSelectedDept('');
-                    setSelectedCycle('');
-                    setSelectedStatus('');
-                  }}
-                  className="h-9 px-2.5 text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg border border-rose-200 dark:border-rose-900/50 font-medium transition-colors cursor-pointer"
-                  title="Reset all filters"
-                >
-                  Reset
-                </button>
-              )}
-
-              <div className="h-5 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block mx-0.5" />
-
-              {/* Refresh button */}
-              <button aria-label="Refresh Directory"
+            <div className="flex items-center gap-2 ml-auto">
+              <button
+                aria-label="Refresh directory"
                 onClick={loadData}
-                title="Refresh Directory"
-                className="h-9 w-9 flex items-center justify-center rounded-lg bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                title="Refresh directory"
+                className="h-8 w-8 flex items-center justify-center rounded-md text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
               >
                 <RotateCw className="w-3.5 h-3.5" />
               </button>
-
-              {/* Cards / Table View Toggle — hidden on mobile since cards are forced there */}
-              <div className="hidden sm:flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700 shrink-0">
-                <button
-                  onClick={() => setViewMode('cards')}
-                  className={`h-7 px-2.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer ${viewMode === 'cards'
-                      ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 font-semibold'
-                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                    }`}
-                  title="Card View"
-                >
-                  <LayoutGrid className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline text-[11px]">Cards</span>
-                </button>
-                <button
-                  onClick={() => setViewMode('table')}
-                  className={`h-7 px-2.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer ${viewMode === 'table'
-                      ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 font-semibold'
-                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                    }`}
-                  title="Table View"
-                >
-                  <List className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline text-[11px]">Table</span>
-                </button>
-              </div>
+              {/* Cards are forced on mobile, so the toggle only shows from sm up */}
+              <SegmentedControl
+                ariaLabel="Directory layout"
+                className="hidden sm:inline-flex"
+                value={viewMode}
+                onChange={setViewMode}
+                options={[
+                  { value: 'cards', label: 'Cards', icon: LayoutGrid },
+                  { value: 'table', label: 'Table', icon: List },
+                ]}
+              />
             </div>
           </div>
+
 
           {/* Employees Display: Cards or Table */}
           {effectiveViewMode === 'cards' ? (
