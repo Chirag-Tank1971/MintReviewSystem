@@ -18,6 +18,8 @@
   "include": [
     "server.ts",
     "server/**/*",
-    "src/**/*"
+    "src/**/*",
+    "scripts/**/*",
+    "test/**/*"
   ]
 }

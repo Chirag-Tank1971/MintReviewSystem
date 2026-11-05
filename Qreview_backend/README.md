@@ -114,7 +114,24 @@ npm start
 2. **Build Command:** `npm run build`
 3. **Start Command:** `npm start`
 4. **Environment Variables:**
-   - Add `PORT` (e.g. `3000` or assigned dynamically by host)
-   - Add `JWT_SECRET`
-   - Add `GEMINI_API_KEY` (optional)
+   - `NODE_ENV=production` (required: enables 15-minute access tokens and strict CORS)
+   - `PORT` (e.g. `3000` or assigned dynamically by host)
+   - `JWT_SECRET` (at least 32 characters, or the server refuses to start)
+   - `ALLOWED_ORIGINS` (your frontend URL)
+   - `MONGODB_URI`
+   - `GEMINI_API_KEY` (optional; without it the AI assistant reports "unavailable")
+   - Leave `ENABLE_DEMO_PERSONAS` unset (the server refuses to start in production if it is `true`)
 5. **CORS:** The server automatically supports CORS requests from your Vercel frontend URL.
+
+### Production checklist
+
+- [ ] Environment variables above are set.
+- [ ] `npm test` passes.
+- [ ] After deploying the login changes, run the one-time account backfill against production:
+  ```bash
+  npm run backfill:users            # dry run: review the report first
+  npm run backfill:users -- --apply # create/rotate accounts and email credentials
+  ```
+  Add `--cleanup-locations` to also remove unused placeholder office locations.
+  It refuses to run unless `MONGODB_URI` connects, and it needs `RESEND_API_KEY` to email
+  credentials (or `--no-email`, after which HR sets passwords from the employee screen).

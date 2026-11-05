@@ -390,29 +390,40 @@ export const ReviewScoringModal: React.FC<ReviewScoringModalProps> = ({
 
   // AI Assist Draft Generator
   const handleAiDraftSummary = async () => {
+    setErrorMessage('');
+    setAiSuccessNote('');
+
+    // The draft is written from the ratings on screen; without them there's nothing real to summarise.
+    if (!(computedScore > 0)) {
+      const msg = 'Rate the KRAs first. The AI draft is written from your ratings.';
+      setErrorMessage(msg);
+      toast.info(msg, 'Nothing to summarise yet');
+      return;
+    }
+
     try {
       setAiLoading(true);
-      setErrorMessage('');
-      setAiSuccessNote('');
 
-      const kraSummary = snapshots.map((s) => ({
-        title: s.kraName || s.title || 'Key Deliverable',
-        weightage: s.weight || 0,
-        target: s.targetSnapshot || 'Quality delivery within SLA',
-      }));
+      const kraSummary = snapshots
+        .map((s) => ({
+          title: s.kraName || s.title || '',
+          weightage: s.weight || 0,
+          target: s.targetSnapshot || '',
+        }))
+        .filter((k) => k.title);
 
       const res = await api.generateAiReviewSynthesis({
         employeeName: review.employeeName,
-        designation: review.designationName,
-        department: review.departmentName,
+        designation: review.designationName || '',
+        department: review.departmentName || '',
         quarterlyScores: [
           {
-            quarter: review.reviewPeriodName || 'Current Quarter',
-            score: computedScore || 4.0,
-            reviewNotes: snapshots.map((s) => s.achievement).filter(Boolean).join('; '),
+            quarter: review.reviewPeriodName || 'This review',
+            score: computedScore,
+            reviewNotes: snapshots.map((s) => s.achievement).filter(Boolean).join('; ') || undefined,
           },
         ],
-        annualScore: computedScore || 4.0,
+        annualScore: computedScore,
         kraSummary,
         perspective: 'manager',
       });
@@ -427,29 +438,15 @@ export const ReviewScoringModal: React.FC<ReviewScoringModalProps> = ({
         if (res.data.growthAreas && res.data.growthAreas.length > 0) {
           setImprovements(res.data.growthAreas.map((g) => `• ${g}`).join('\n'));
         }
-        setAiSuccessNote('Draft summary written with Gemini. Read it through and edit it before you submit.');
+        setAiSuccessNote(
+          `Draft summary written by AI (${res.engine || 'model'}). Read it through and edit it before you submit.`
+        );
       }
     } catch (err: any) {
-      console.warn('AI synthesis fallback:', err);
-      const highRatedKras = snapshots.filter((s) => (s.rating || 0) >= 3.5);
-      const lowRatedKras = snapshots.filter((s) => (s.rating || 0) > 0 && (s.rating || 0) < 3.5);
-
-      const fallbackStrengths =
-        highRatedKras.length > 0
-          ? highRatedKras.map((k) => `• Exceptional ownership and execution on ${k.kraName || k.title || 'deliverables'}.`).join('\n')
-          : `• Consistently demonstrated dependable execution on core technical deliverables.\n• Proactive team collaboration and consistent attendance in sprint milestones.`;
-
-      const fallbackGrowth =
-        lowRatedKras.length > 0
-          ? lowRatedKras.map((k) => `• Target deeper consistency and stretch SLA benchmarks for ${k.kraName || k.title || 'targeted deliverables'}.`).join('\n')
-          : `• Further enhance autonomous system design and technical documentation.\n• Expand cross-departmental impact and domain knowledge sharing.`;
-
-      setStrengths(fallbackStrengths);
-      setImprovements(fallbackGrowth);
-      setManagerComments(
-        `${review.employeeName} demonstrated dependable ownership and disciplined execution throughout ${review.reviewPeriodName}. Core deliverables align well with department milestones, achieving a weighted rating of ${computedScore > 0 ? computedScore.toFixed(2) : '3.50'}/5.00.`
-      );
-      setAiSuccessNote('Draft summary written from the current KRA ratings. Read it through and edit it before you submit.');
+      // No canned fallback: leave the manager's own text untouched and say what happened.
+      const msg = err?.message || 'The AI assistant is unavailable right now. Please write the summary manually.';
+      setErrorMessage(msg);
+      toast.warning(msg, 'AI draft unavailable');
     } finally {
       setAiLoading(false);
     }

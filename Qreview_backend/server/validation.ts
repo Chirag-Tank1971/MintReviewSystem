@@ -37,7 +37,13 @@ function formatZodErrors(error: ZodError): Array<{ field: string; message: strin
 // ============================================================================
 
 export const LoginSchema = z.object({
-  email: z.string().trim().min(1, 'Email is required').email('Invalid email address format'),
+  // Work email or employee code (e.g. MS0001). The field keeps its historical name.
+  email: z
+    .string()
+    .trim()
+    .min(1, 'Email or employee ID is required')
+    .max(254)
+    .refine((v) => !v.includes('@') || z.string().email().safeParse(v).success, 'Invalid email address format'),
   password: z.string().min(1, 'Password is required'),
 });
 
@@ -344,4 +350,27 @@ export const PipCancelSchema = z.object({
 export const PipFailureResolutionSchema = z.object({
   action: z.enum(['NEW_PIP_STARTED', 'TERMINATION_PROCESSED', 'ESCALATED_TO_MANAGEMENT', 'NO_FURTHER_ACTION']),
   notes: z.string().max(2000).optional().or(z.literal('')),
+});
+
+/**
+ * Editable 9-box assessment fields. Identity fields (id, employeeId, name, department) and
+ * derived values (currentScore) are not accepted from the client; unknown keys are stripped.
+ */
+const level = z.string().trim().max(50);
+export const TalentRecordUpdateSchema = z.object({
+  performanceLevel: level.optional(),
+  potentialLevel: level.optional(),
+  nineBoxCategory: z.string().trim().max(100).optional(),
+  nineBoxGrid: z
+    .object({
+      performance: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+      potential: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+    })
+    .optional(),
+  flightRisk: z.enum(['LOW', 'MEDIUM', 'HIGH', 'low', 'medium', 'high']).optional(),
+  riskFactors: z.array(z.string().trim().max(300)).max(20).optional(),
+  recommendedActions: z.array(z.string().trim().max(300)).max(20).optional(),
+  growthPlan: z.string().max(4000).optional(),
+  successionReady: z.boolean().optional(),
+  targetNextRole: z.string().trim().max(150).optional(),
 });

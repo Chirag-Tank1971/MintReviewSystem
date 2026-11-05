@@ -826,7 +826,7 @@ appraisalRouter.post(
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const user = req.user;
-      const { cycleId, appraisalYear = 2026, overrideExisting = false } = req.body;
+      const { cycleId, appraisalYear = new Date().getFullYear(), overrideExisting = false } = req.body;
 
       if (!cycleId) {
         return res.status(400).json({ error: 'cycleId is required to initiate appraisal cohort' });

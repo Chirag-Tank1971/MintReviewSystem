@@ -412,9 +412,10 @@ mastersRouter.delete('/designations/:id', requireRoles('SUPER_ADMIN', 'HR'), asy
 // 2.5 LOCATIONS (Work Location Registry)
 // ==========================================
 
+// Operating regions offered in the location picker before any employee uses them.
+// (Generic placeholder offices were removed; scripts/backfill-user-accounts.ts --cleanup-locations
+// deletes any that were seeded earlier and are unused.)
 const DEFAULT_LOCATIONS = [
-  'Bangalore HQ', 'Corporate Office', 'Head Office', 'Mumbai Branch',
-  'Delhi NCR Hub', 'Hyderabad Tech Center', 'Jaipur Office',
   'Delhi', 'Haryana', 'Uttar Pradesh', 'Rajasthan', 'West Bengal',
   'Patna', 'Jodhpur', 'Jaipur', 'Chennai', 'HYDERABAD', 'LUCKNOW',
   'Remote - India', 'Global Remote',

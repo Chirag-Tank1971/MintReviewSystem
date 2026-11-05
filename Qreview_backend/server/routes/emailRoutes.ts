@@ -63,8 +63,11 @@ emailRouter.get('/health', async (req: AuthenticatedRequest, res: Response) => {
  */
 emailRouter.post('/test', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const targetEmail = req.body.email || req.user?.email || 'admin@example.com';
-    const targetName = req.body.name || req.user?.name || 'Administrator';
+    const targetEmail = req.body?.email || req.user?.email;
+    if (!targetEmail) {
+      return res.status(400).json({ error: 'A recipient email address is required.' });
+    }
+    const targetName = req.body?.name || req.user?.name || targetEmail;
 
     const { subject, html } = renderTestEmail({
       recipientName: targetName,

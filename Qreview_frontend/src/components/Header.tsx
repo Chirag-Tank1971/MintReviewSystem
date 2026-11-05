@@ -44,7 +44,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenLogin,
   onOpenMobileMenu,
 }) => {
-  const { user, employeeProfile, logout, switchRole, isLoading } = useAuth();
+  const { user, employeeProfile, logout, switchRole, canSwitchPersona, isLoading } = useAuth();
   const { theme, isDark, setTheme, toggleTheme } = useTheme();
   const { unreadCount: unreadNotifCount } = useNotifications();
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
@@ -129,20 +129,18 @@ export const Header: React.FC<HeaderProps> = ({
 
   const currentRoleConfig = user ? roleConfigs[user.role] : roleConfigs.EMPLOYEE;
 
-  const quickPersonas = [
-    { role: 'SUPER_ADMIN' as UserRole, name: 'System Admin', title: 'Super Admin', userId: 'usr_sa', icon: Shield },
-    { role: 'HR' as UserRole, name: 'Frank HR Manager', title: 'HR Manager', userId: 'usr_mgr_hr', icon: UserCheck },
-    { role: 'MANAGER' as UserRole, name: 'Dave Eng Manager', title: 'Reporting Manager', userId: 'usr_mgr_eng', icon: Briefcase },
-    { role: 'HOD' as UserRole, name: 'Nikhilesh Srivastava', title: 'Dept Head (HOD)', userId: 'usr_hod_nikhilesh', icon: Building2 },
-    { role: 'MANAGEMENT' as UserRole, name: 'Executive Management', title: 'C-Suite / Board', userId: 'usr_mgmt_persona', icon: Sparkles },
-    { role: 'EMPLOYEE' as UserRole, name: 'Grace Engineer', title: 'Employee (ESS)', userId: 'usr_com_1', icon: Layers },
-  ];
+  // Staging persona switcher: switches to the first real active account holding each role.
+  const quickPersonas = (['SUPER_ADMIN', 'HR', 'MANAGER', 'HOD', 'MANAGEMENT', 'EMPLOYEE'] as UserRole[]).map((role) => ({
+    role,
+    name: roleConfigs[role].label,
+    icon: roleConfigs[role].icon,
+  }));
 
   const handleQuickSwitch = async (p: typeof quickPersonas[0]) => {
     try {
       setIsSwitchingRole(true);
       setIsPersonaMenuOpen(false);
-      await switchRole(p.role, p.userId);
+      await switchRole(p.role);
     } catch (err) {
       console.error('Failed to switch persona:', err);
     } finally {
@@ -213,7 +211,7 @@ export const Header: React.FC<HeaderProps> = ({
               {user ? (
                 <>
                   {/* Role Indicator / Switcher Pill */}
-                  {(!import.meta.env.PROD || import.meta.env.VITE_ENABLE_DEMO_PERSONAS === 'true') ? (
+                  {canSwitchPersona ? (
                     <div className="relative" ref={personaDropdownRef}>
                       <button
                         onClick={() => setIsPersonaMenuOpen(!isPersonaMenuOpen)}
@@ -249,7 +247,6 @@ export const Header: React.FC<HeaderProps> = ({
                                     <IconComponent className="w-3.5 h-3.5 text-slate-500" />
                                     <div className="text-left">
                                       <div className="font-medium text-slate-900 dark:text-slate-100">{p.name}</div>
-                                      <div className="text-xs text-slate-500 dark:text-slate-400">{p.title}</div>
                                     </div>
                                   </div>
                                   {isCurrent && <Check className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />}

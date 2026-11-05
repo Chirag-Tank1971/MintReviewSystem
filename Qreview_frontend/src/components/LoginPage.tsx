@@ -1,28 +1,10 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { UserRole } from '../types';
 import { Eye, EyeOff, AlertCircle, Loader2, Sun, Moon } from 'lucide-react';
 
 import { AppLogo } from './ui/AppLogo';
 import { INPUT_CLASS, LABEL_CLASS } from './ui/formStyles';
-
-interface QuickRole {
-  role: UserRole;
-  title: string;
-  shortLabel: string;
-  email: string;
-  name: string;
-}
-
-const QUICK_ROLES: QuickRole[] = [
-  { role: 'SUPER_ADMIN', title: 'Super Admin', shortLabel: 'Admin', email: 'admin@company.com', name: 'System Admin' },
-  { role: 'HR', title: 'HR Manager', shortLabel: 'HR', email: 'frank.mgr@company.com', name: 'Frank HR' },
-  { role: 'MANAGER', title: 'Reporting Manager', shortLabel: 'Manager', email: 'dave.mgr@company.com', name: 'Dave Eng Manager' },
-  { role: 'HOD', title: 'Head of Department', shortLabel: 'HOD', email: 'nikhilesh.hod@company.com', name: 'Nikhilesh Srivastava' },
-  { role: 'MANAGEMENT', title: 'Executive Management', shortLabel: 'Executive', email: 'executive@company.com', name: 'Executive Management' },
-  { role: 'EMPLOYEE', title: 'Employee', shortLabel: 'Employee', email: 'grace@company.com', name: 'Grace Engineer' },
-];
 
 /** The stages a quarterly review moves through, in order. */
 const REVIEW_PATH = ['Self-assessment', 'Manager', 'HOD', 'HR approval'];
@@ -90,7 +72,7 @@ const ExampleKraCard: React.FC = () => (
 );
 
 export const LoginPage: React.FC = () => {
-  const { login, switchRole, isLoading } = useAuth();
+  const { login, isLoading } = useAuth();
   const { isDark, toggleTheme } = useTheme();
 
   const [email, setEmail] = useState('');
@@ -99,7 +81,6 @@ export const LoginPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showForgotInfo, setShowForgotInfo] = useState(false);
-  const [selectedPersona, setSelectedPersona] = useState<QuickRole | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,29 +98,6 @@ export const LoginPage: React.FC = () => {
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handleQuickLogin = async (quickRole: QuickRole) => {
-    setError(null);
-    setIsSubmitting(true);
-    try {
-      await switchRole(quickRole.role);
-    } catch {
-      try {
-        await login(quickRole.email, 'password123');
-      } catch (fallbackErr: any) {
-        setError(fallbackErr.message || 'Demo sign-in failed.');
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleSelectPersona = (qr: QuickRole) => {
-    setSelectedPersona(qr);
-    setEmail(qr.email);
-    setPassword('password123');
-    setError(null);
   };
 
   const isActionLocked = isLoading || isSubmitting;
@@ -208,55 +166,6 @@ export const LoginPage: React.FC = () => {
             </p>
 
             <div className="mt-3 sm:mt-4">
-              {/* Demo users: development builds only */}
-              {import.meta.env.DEV && (
-                <div className="mb-2.5 sm:mb-3 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 p-2 sm:p-2.5 space-y-1.5">
-                  <div className="flex items-baseline justify-between">
-                    <span className="text-xs font-medium text-slate-800 dark:text-slate-200">Demo users</span>
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400">Dev only</span>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-1">
-                    {QUICK_ROLES.map((qr) => {
-                      const isSelected = selectedPersona?.role === qr.role;
-                      return (
-                        <button
-                          key={qr.role}
-                          type="button"
-                          onClick={() => handleSelectPersona(qr)}
-                          aria-pressed={isSelected}
-                          title={`Use the ${qr.title} demo user`}
-                          className={`px-1.5 py-1 rounded-md border text-[11px] font-medium truncate transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
-                            isSelected
-                              ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-400 dark:border-indigo-600 text-indigo-800 dark:text-indigo-200'
-                              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-                          }`}
-                        >
-                          {qr.shortLabel}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {selectedPersona && (
-                    <div className="flex items-center justify-between gap-2 rounded-md bg-slate-50 dark:bg-slate-850 px-2 py-1.5 animate-fadeIn">
-                      <div className="min-w-0">
-                        <div className="text-xs font-medium text-slate-900 dark:text-white truncate">{selectedPersona.name}</div>
-                        <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{selectedPersona.email}</div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleQuickLogin(selectedPersona)}
-                        disabled={isActionLocked}
-                        className="shrink-0 px-2 py-1 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-semibold transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500"
-                      >
-                        {isActionLocked && <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />}
-                        Sign in as {selectedPersona.shortLabel}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
 
               {error && (
                 <div

@@ -20,6 +20,7 @@ import { api } from '../services/api';
 import { PieChart } from './ui/PieChart';
 import { PageHeader } from './ui/PageHeader';
 import { SELECT_CLASS } from './ui/formStyles';
+import { CURRENT_YEAR, yearOptions } from '../utils/fiscalYears';
 
 interface BellCurveBudgetAnalyticsProps {
   cycles: Cycle[];
@@ -31,7 +32,7 @@ export const BellCurveBudgetAnalytics: React.FC<BellCurveBudgetAnalyticsProps> =
   const [data, setData] = useState<ExecutiveAnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedCycleId, setSelectedCycleId] = useState<string>('ALL');
-  const [selectedYear, setSelectedYear] = useState<number>(2026);
+  const [selectedYear, setSelectedYear] = useState<number>(CURRENT_YEAR);
   const [activeTab, setActiveTab] = useState<'bellCurve' | 'budgets' | 'attrition' | 'cycles'>('bellCurve');
   const [expandedDeptId, setExpandedDeptId] = useState<string | null>(null);
 
@@ -83,8 +84,9 @@ export const BellCurveBudgetAnalytics: React.FC<BellCurveBudgetAnalyticsProps> =
             onChange={(e) => setSelectedYear(Number(e.target.value))}
             className={SELECT_CLASS}
           >
-            <option value={2026}>FY 2026</option>
-            <option value={2025}>FY 2025</option>
+            {yearOptions().map((y) => (
+              <option key={y} value={y}>FY {y}</option>
+            ))}
           </select>
           </>
         }

@@ -65,9 +65,9 @@ export function generateLetterHtml(
   const oldBreakdown = calculateSalaryBreakdown(currentCtc);
   const newBreakdown = calculateSalaryBreakdown(revisedCtc);
 
-  const ref = refNumber || `HR/APP/${appraisal.appraisalYear || 2026}/${appraisal.employeeCode}`;
+  const ref = refNumber || `HR/APP/${appraisal.appraisalYear || new Date().getFullYear()}/${appraisal.employeeCode}`;
   const todayDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-  const effectiveDate = appraisal.effectiveDate || `${appraisal.appraisalYear || 2026}-10-01`;
+  const effectiveDate = appraisal.effectiveDate || `${appraisal.appraisalYear || new Date().getFullYear()}-10-01`;
 
   return `
 <!DOCTYPE html>
@@ -324,17 +324,17 @@ export function generateLetterHtml(
       <div class="recipient-detail">Employee Code: <span class="font-mono" style="font-weight: 700;">${appraisal.employeeCode}</span></div>
       <div class="recipient-detail">Department: <strong>${appraisal.departmentName}</strong></div>
       <div class="recipient-detail">Current Designation: <strong>${appraisal.designationName}</strong></div>
-      <div class="recipient-detail">Cohort Cycle: <strong>${appraisal.cycleName} (${appraisal.appraisalYear || 2026})</strong></div>
+      <div class="recipient-detail">Cohort Cycle: <strong>${appraisal.cycleName} (${appraisal.appraisalYear || new Date().getFullYear()})</strong></div>
     </div>
 
     <div class="subject-line">
-      SUBJECT: ANNUAL APPRAISAL & SALARY REVISION NOTIFICATION — FISCAL YEAR ${appraisal.appraisalYear || 2026}
+      SUBJECT: ANNUAL APPRAISAL & SALARY REVISION NOTIFICATION — FISCAL YEAR ${appraisal.appraisalYear || new Date().getFullYear()}
     </div>
 
     <p style="margin: 8px 0;">Dear <strong>${appraisal.employeeName}</strong>,</p>
 
     <p style="margin: 8px 0;">
-      We are pleased to inform you of the final outcome of your Annual Performance Appraisal for cycle year <strong>${appraisal.appraisalYear || 2026}</strong> under the <strong>${appraisal.cycleName}</strong> cohort. Following multi-tiered performance calibration across your four quarterly review milestones, the Executive Appraisal Board has ratified your composite performance band as <span class="highlight-pill">${(appraisal.finalRating || appraisal.recommendedRating || 'MEETS_EXPECTATIONS').replace(/_/g, ' ')}</span> with a rolling quarterly average of <strong>${appraisal.averageQuarterlyScore.toFixed(2)} / 5.00</strong>.
+      We are pleased to inform you of the final outcome of your Annual Performance Appraisal for cycle year <strong>${appraisal.appraisalYear || new Date().getFullYear()}</strong> under the <strong>${appraisal.cycleName}</strong> cohort. Following multi-tiered performance calibration across your four quarterly review milestones, the Executive Appraisal Board has ratified your composite performance band as <span class="highlight-pill">${(appraisal.finalRating || appraisal.recommendedRating || 'MEETS_EXPECTATIONS').replace(/_/g, ' ')}</span> with a rolling quarterly average of <strong>${appraisal.averageQuarterlyScore.toFixed(2)} / 5.00</strong>.
     </p>
 
     ${appraisal.promotionRecommended ? `
@@ -549,7 +549,7 @@ export async function downloadAppraisalPdf(
 
     const fname =
       filename ||
-      `Appraisal_Letter_${appraisal.employeeCode}_${appraisal.employeeName.replace(/\s+/g, '_')}_${appraisal.appraisalYear || 2026}.pdf`;
+      `Appraisal_Letter_${appraisal.employeeCode}_${appraisal.employeeName.replace(/\s+/g, '_')}_${appraisal.appraisalYear || new Date().getFullYear()}.pdf`;
     pdf.save(fname);
   } finally {
     document.body.removeChild(container);
@@ -595,7 +595,7 @@ async function generateAppraisalPdfBlob(
     pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
 
     const blob = pdf.output('blob');
-    const filename = `Appraisal_Letter_${appraisal.employeeCode}_${appraisal.employeeName.replace(/\s+/g, '_')}_${appraisal.appraisalYear || 2026}.pdf`;
+    const filename = `Appraisal_Letter_${appraisal.employeeCode}_${appraisal.employeeName.replace(/\s+/g, '_')}_${appraisal.appraisalYear || new Date().getFullYear()}.pdf`;
 
     return { filename, blob };
   } finally {
@@ -613,7 +613,7 @@ export async function exportAppraisalsToZip(
 ): Promise<void> {
   const { default: JSZip } = await import('jszip');
   const zip = new JSZip();
-  const folder = zip.folder(`Appraisal_Letters_${appraisals[0]?.appraisalYear || 2026}`);
+  const folder = zip.folder(`Appraisal_Letters_${appraisals[0]?.appraisalYear || new Date().getFullYear()}`);
 
   for (let i = 0; i < appraisals.length; i++) {
     const appraisal = appraisals[i];
@@ -626,13 +626,13 @@ export async function exportAppraisalsToZip(
 
   // Also include the payroll CSV summary inside the zip
   const csvContent = generatePayrollCsv(appraisals);
-  folder?.file(`Payroll_Compensation_Increment_Summary_${appraisals[0]?.appraisalYear || 2026}.csv`, csvContent);
+  folder?.file(`Payroll_Compensation_Increment_Summary_${appraisals[0]?.appraisalYear || new Date().getFullYear()}.csv`, csvContent);
 
   const content = await zip.generateAsync({ type: 'blob' });
   const url = URL.createObjectURL(content);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `Appraisal_Letters_Batch_${appraisals.length}_Employees_${appraisals[0]?.appraisalYear || 2026}.zip`;
+  a.download = `Appraisal_Letters_Batch_${appraisals.length}_Employees_${appraisals[0]?.appraisalYear || new Date().getFullYear()}.zip`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -683,7 +683,7 @@ function generatePayrollCsv(appraisals: Appraisal[]): string {
       `"${a.departmentName}"`,
       `"${a.designationName}"`,
       `"${a.cycleName}"`,
-      `"${a.appraisalYear || 2026}"`,
+      `"${a.appraisalYear || new Date().getFullYear()}"`,
       a.averageQuarterlyScore.toFixed(2),
       `"${(a.finalRating || a.recommendedRating || 'MEETS_EXPECTATIONS').replace(/_/g, ' ')}"`,
       currentCtc,
@@ -692,7 +692,7 @@ function generatePayrollCsv(appraisals: Appraisal[]): string {
       incAmt,
       revisedCtc,
       newMonthly,
-      `"${a.effectiveDate || `${a.appraisalYear || 2026}-10-01`}"`,
+      `"${a.effectiveDate || `${a.appraisalYear || new Date().getFullYear()}-10-01`}"`,
       a.promotionRecommended ? 'YES' : 'NO',
       `"${a.promotionDesignationName || a.designationName}"`,
       `"${a.status}"`,
@@ -715,7 +715,7 @@ export function downloadPayrollCsv(appraisals: Appraisal[], filename?: string): 
   a.href = url;
   a.download =
     filename ||
-    `Payroll_Compensation_Reconciliation_${appraisals.length}_Records_${appraisals[0]?.appraisalYear || 2026}.csv`;
+    `Payroll_Compensation_Reconciliation_${appraisals.length}_Records_${appraisals[0]?.appraisalYear || new Date().getFullYear()}.csv`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

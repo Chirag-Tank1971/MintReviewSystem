@@ -23,6 +23,7 @@ import { ReturnAnalyticsReport } from './reports/ReturnAnalyticsReport';
 import { PageSkeletonLoader } from './ui/PageSkeletonLoader';
 import { PageHeader } from './ui/PageHeader';
 import { Button } from './ui/Button';
+import { CURRENT_YEAR, yearOptions } from '../utils/fiscalYears';
 
 export interface ReportsViewConfig {
   reportType?: ReportType;
@@ -80,7 +81,7 @@ export const ReportsCenterView: React.FC<ReportsCenterViewProps> = ({ department
   const [selectedCycle, setSelectedCycle] = useState<string>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [selectedYear, setSelectedYear] = useState<number>(2026);
+  const [selectedYear, setSelectedYear] = useState<number>(CURRENT_YEAR);
   const [selectedAuditModule, setSelectedAuditModule] = useState<string>('ALL');
   const [selectedPeriod, setSelectedPeriod] = useState<string>('ALL');
   const [periods, setPeriods] = useState<ReviewPeriod[]>([]);
@@ -467,8 +468,9 @@ export const ReportsCenterView: React.FC<ReportsCenterViewProps> = ({ department
               onChange={(e) => setSelectedYear(Number(e.target.value))}
               className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 font-medium text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer text-xs"
             >
-              <option value={2026} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">FY 2026</option>
-              <option value={2025} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">FY 2025</option>
+              {yearOptions().map((y) => (
+                <option key={y} value={y} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">FY {y}</option>
+              ))}
             </select>
           )}
 
@@ -624,7 +626,7 @@ export const ReportsCenterView: React.FC<ReportsCenterViewProps> = ({ department
                                 {row.status}
                               </span>
                             </td>
-                            <td className="px-4 py-3 text-slate-500 dark:text-slate-400 tabular-nums">{row.dueDate}</td>
+                            <td className="px-4 py-3 text-slate-500 dark:text-slate-400 tabular-nums">{row.dueDate ? String(row.dueDate).slice(0, 10) : '—'}</td>
                           </tr>
                         ))}
                       </tbody>

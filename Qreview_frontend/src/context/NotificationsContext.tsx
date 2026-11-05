@@ -17,6 +17,8 @@ const NotificationsContext = createContext<NotificationsContextType | undefined>
 // 20s keeps the badge timely without every open tab hammering the API; actions on this tab
 // refresh instantly via the `notifications-updated` event below.
 const POLL_INTERVAL_MS = 20000;
+// After a failed poll (network error, 429, 5xx) skip polling for a while instead of retrying every tick.
+const ERROR_BACKOFF_MS = 60000;
 
 /**
  * Owns the app-wide unread-notification badge count: one lightweight poll instead of every
@@ -35,12 +37,14 @@ export const NotificationsProvider: React.FC<{ children: ReactNode }> = ({ child
   // whatever's already unread so we never toast-escalate a backlog right after signing in;
   // only items that newly appear *during* the session trigger the real-time toast below.
   const seenHighPriorityIdsRef = useRef<Set<string> | null>(null);
+  const backoffUntilRef = useRef(0);
 
   const refreshUnreadCount = useCallback(async () => {
     if (!isAuthenticated) return;
     try {
       const { unreadCount: count, highPriorityUnreadIds } = await api.getUnreadNotificationCount();
       setUnreadCount(count);
+      backoffUntilRef.current = 0;
 
       if (seenHighPriorityIdsRef.current === null) {
         seenHighPriorityIdsRef.current = new Set(highPriorityUnreadIds);
@@ -58,9 +62,16 @@ export const NotificationsProvider: React.FC<{ children: ReactNode }> = ({ child
         }
       }
     } catch {
-      // Quiet fallback — keep the last known count rather than flashing to 0 on a transient error.
+      // Keep the last known count rather than flashing to 0, and back off before polling again.
+      backoffUntilRef.current = Date.now() + ERROR_BACKOFF_MS;
     }
   }, [isAuthenticated]);
+
+  /** Scheduled tick: honours the error backoff (explicit refreshes don't). */
+  const pollTick = useCallback(() => {
+    if (Date.now() < backoffUntilRef.current) return;
+    refreshUnreadCount();
+  }, [refreshUnreadCount]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -77,7 +88,7 @@ export const NotificationsProvider: React.FC<{ children: ReactNode }> = ({ child
     };
     const startPolling = () => {
       if (intervalRef.current) return;
-      intervalRef.current = setInterval(refreshUnreadCount, POLL_INTERVAL_MS);
+      intervalRef.current = setInterval(pollTick, POLL_INTERVAL_MS);
     };
 
     refreshUnreadCount();
@@ -103,7 +114,7 @@ export const NotificationsProvider: React.FC<{ children: ReactNode }> = ({ child
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('notifications-updated', handleNotificationsUpdated);
     };
-  }, [isAuthenticated, refreshUnreadCount]);
+  }, [isAuthenticated, refreshUnreadCount, pollTick]);
 
   return (
     <NotificationsContext.Provider value={{ unreadCount, refreshUnreadCount }}>

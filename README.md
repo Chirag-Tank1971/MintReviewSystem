@@ -341,6 +341,18 @@ APP_URL=http://localhost:5173
 # Optional: keep console.log/info/warn output in production (silenced by default)
 ENABLE_PROD_LOGS=false
 
+# Staging/local only: the Super Admin persona switcher. Off unless exactly "true".
+# The server refuses to start in production if this is enabled.
+# (Frontend counterpart: VITE_ENABLE_DEMO_PERSONAS=true shows the switcher menu.)
+ENABLE_DEMO_PERSONAS=false
+
+# API rate limits per 15 minutes: per signed-in user, and per IP for anonymous traffic
+RATE_LIMIT_AUTH_MAX=1500
+RATE_LIMIT_ANON_MAX=300
+
+# Optional: Gemini models to try, in order (comma-separated)
+GEMINI_MODELS=gemini-3.8-flash,gemini-flash-latest
+
 # Optional: MongoDB URI (falls back to local embedded store if not reachable)
 MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.mongodb.net/review_appraisal_db?retryWrites=true&w=majority
 

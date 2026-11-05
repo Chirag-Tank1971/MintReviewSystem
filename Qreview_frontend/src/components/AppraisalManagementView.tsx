@@ -43,6 +43,7 @@ import { EmployeeStatusBadge } from './ui/StatusBadge';
 import { PageHeader } from './ui/PageHeader';
 import { Button } from './ui/Button';
 import { m, AnimatePresence, accordionVariants } from '../animations';
+import { CURRENT_YEAR, yearOptions } from '../utils/fiscalYears';
 
 export interface AppraisalViewConfig {
   /** Legacy deep-link field; Bell Curve & Budget is now its own 'calibration' view. */
@@ -107,7 +108,7 @@ export const AppraisalManagementView: React.FC<AppraisalManagementViewProps> = (
 
   // Filters
   const [selectedCycleId, setSelectedCycleId] = useState<string>('ALL');
-  const [selectedYear, setSelectedYear] = useState<number>(2026);
+  const [selectedYear, setSelectedYear] = useState<number>(CURRENT_YEAR);
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -279,11 +280,11 @@ export const AppraisalManagementView: React.FC<AppraisalManagementViewProps> = (
   const displayedAppraisals = baseAppraisals.filter((a) => matchesQuickView(a, quickView));
 
   const hasDetailFilters =
-    selectedCycleId !== 'ALL' || selectedYear !== 2026 || selectedDepartmentId !== 'ALL' || selectedStatus !== 'ALL';
+    selectedCycleId !== 'ALL' || selectedYear !== CURRENT_YEAR || selectedDepartmentId !== 'ALL' || selectedStatus !== 'ALL';
 
   const clearAllFilters = () => {
     setSelectedCycleId('ALL');
-    setSelectedYear(2026);
+    setSelectedYear(CURRENT_YEAR);
     setSelectedDepartmentId('ALL');
     setSelectedStatus('ALL');
     setSearchQuery('');
@@ -297,7 +298,7 @@ export const AppraisalManagementView: React.FC<AppraisalManagementViewProps> = (
       label: cycles.find((c) => c.id === selectedCycleId)?.name || 'Cycle',
       clear: () => setSelectedCycleId('ALL'),
     },
-    selectedYear !== 2026 && { key: 'year', label: `FY ${selectedYear}`, clear: () => setSelectedYear(2026) },
+    selectedYear !== CURRENT_YEAR && { key: 'year', label: `FY ${selectedYear}`, clear: () => setSelectedYear(CURRENT_YEAR) },
     selectedDepartmentId !== 'ALL' && {
       key: 'dept',
       label: departments.find((d) => d.id === selectedDepartmentId)?.name || 'Department',
@@ -541,9 +542,11 @@ export const AppraisalManagementView: React.FC<AppraisalManagementViewProps> = (
                 onChange={(e) => setSelectedYear(Number(e.target.value))}
                 className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
               >
-                <option value={2026} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">2026 (Current)</option>
-                <option value={2025} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">2025</option>
-                <option value={2027} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">2027</option>
+                {[CURRENT_YEAR + 1, ...yearOptions()].map((y) => (
+                  <option key={y} value={y} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">
+                    {y}{y === CURRENT_YEAR ? ' (Current)' : ''}
+                  </option>
+                ))}
               </select>
             </div>
 
