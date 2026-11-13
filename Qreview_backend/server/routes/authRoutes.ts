@@ -1,6 +1,7 @@
-import express, { Request, Response } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
-import { getDbCollection, getDatabaseStatus } from '../db.js';
+import { getDbCollection } from '../db.js';
+import { getConfig } from '../config.js';
 import {
   generateAccessToken,
   generateRefreshToken,
@@ -9,6 +10,7 @@ import {
   authenticateToken,
   verifyTokenString,
   recordAuditLog,
+  getImpersonatorId,
   AuthenticatedRequest,
 } from '../auth.js';
 import { validateBody, LoginSchema, ChangePasswordSchema } from '../validation.js';
@@ -49,6 +51,9 @@ function clearFailures(ip: string) {
   loginFailMap.delete(ip);
 }
 
+// Hash of a random throwaway string; compared against when the account doesn't exist.
+const DUMMY_BCRYPT_HASH = bcrypt.hashSync(`unused-${Date.now()}-${Math.random()}`, 10);
+
 /**
  * POST /api/auth/login
  * Authenticates user by email and password with runtime input validation and token lifecycle support
@@ -59,49 +64,21 @@ authRouter.post('/login', validateBody(LoginSchema), async (req: Request, res: R
     const ip = getClientIp(req);
 
     const usersCol = getDbCollection('users');
-    let user = await usersCol.findOne({ email: email.toLowerCase().trim() });
-
-    // If user record not found in users collection, check employees collection
-    if (!user) {
-      const employeesCol = getDbCollection('employees');
-      const emp = await employeesCol.findOne({
-        $or: [
-          { email: email.toLowerCase().trim() },
-          { employeeCode: email.toUpperCase().trim() },
-        ],
-      });
-
-      if (emp) {
-        let inferredRole: UserRole = 'EMPLOYEE';
-        const desigLower = (emp.designationName || '').toLowerCase();
-        if (desigLower.includes('hr manager') || desigLower.includes('hr lead')) inferredRole = 'HR';
-        else if (desigLower.includes('manager') || desigLower.includes('lead')) inferredRole = 'MANAGER';
-        else if (desigLower.includes('vp') || desigLower.includes('director') || desigLower.includes('hod')) inferredRole = 'HOD';
-
-        const defaultHash = bcrypt.hashSync('password123', 10);
-        user = {
-          id: `usr_${emp.id}`,
-          employeeId: emp.id,
-          email: emp.email,
-          name: emp.name,
-          role: inferredRole,
-          roleId: `role_${inferredRole.toLowerCase()}`,
-          active: emp.status !== 'INACTIVE',
-          passwordHash: defaultHash,
-          mustChangePassword: true,
-          tokenVersion: 1,
-          createdAt: emp.createdAt || new Date().toISOString(),
-        };
-
-        try {
-          await usersCol.insertOne(user);
-        } catch {
-          // quiet fallback
-        }
-      }
+    // Sign in with a work email or an employee code. Either way the account must already exist:
+    // accounts are provisioned by HR (employee create / bulk import) or the backfill script,
+    // never implicitly at login.
+    const identifier = String(email).trim();
+    let user = null;
+    if (identifier.includes('@')) {
+      user = await usersCol.findOne({ email: identifier.toLowerCase() });
+    } else {
+      const emp = await getDbCollection('employees').findOne({ employeeCode: identifier.toUpperCase() });
+      if (emp) user = await usersCol.findOne({ employeeId: emp.id });
     }
 
     if (!user) {
+      // Equalise response time with the wrong-password path so account existence isn't leaked.
+      bcrypt.compareSync(password, DUMMY_BCRYPT_HASH);
       const failCount = recordFailure(ip);
       const remainingAttempts = Math.max(0, MAX_LOGIN_ATTEMPTS - failCount);
       console.warn(`[Auth] Login failed: User "${email}" not found from IP: ${ip} (Failed attempts: ${failCount}/${MAX_LOGIN_ATTEMPTS})`);
@@ -230,206 +207,158 @@ authRouter.get('/me', authenticateToken, async (req: AuthenticatedRequest, res: 
   });
 });
 
+// ---------------------------------------------------------------------------
+// Demo persona switcher (staging / local only)
+//
+// Fail-closed: both endpoints answer 404 unless ENABLE_DEMO_PERSONAS=true, and they always
+// require an authenticated SUPER_ADMIN — or a persona session that a SUPER_ADMIN started,
+// identified by the impersonatorId claim, so the admin can switch back.
+// ---------------------------------------------------------------------------
+async function requireDemoPersonaAccess(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  if (!getConfig().ENABLE_DEMO_PERSONAS) {
+    return res.status(404).json({ error: 'API endpoint not found.' });
+  }
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required.' });
+  }
+  if (req.user.role === 'SUPER_ADMIN') {
+    res.locals.adminId = req.user.id;
+    return next();
+  }
+  const impersonatorId = getImpersonatorId(req.headers['authorization']?.split(' ')[1]);
+  if (impersonatorId) {
+    const admin = await getDbCollection('users').findOne({ id: impersonatorId });
+    if (admin && admin.active !== false && admin.role === 'SUPER_ADMIN') {
+      res.locals.adminId = admin.id;
+      return next();
+    }
+  }
+  return res.status(403).json({ error: 'Forbidden: persona switching requires a Super Admin session.' });
+}
+
+const ROLE_ALIASES: Record<string, UserRole> = {
+  ADMIN: 'SUPER_ADMIN', SUPERADMIN: 'SUPER_ADMIN', SYSTEMADMIN: 'SUPER_ADMIN',
+  HR: 'HR', HRMANAGER: 'HR', HRLEAD: 'HR', HRBP: 'HR', HRADMIN: 'HR', HUMANRESOURCES: 'HR',
+  MGR: 'MANAGER', MANAGER: 'MANAGER', REPORTINGMANAGER: 'MANAGER', ENGMANAGER: 'MANAGER',
+  HIRINGMANAGER: 'MANAGER', TAMANAGER: 'MANAGER',
+  HOD: 'HOD', HEADOFORGANIZATION: 'HOD', HEADOFORGANISATION: 'HOD', HEADOFDEPARTMENT: 'HOD',
+  DEPTHEAD: 'HOD', DEPARTMENTHEAD: 'HOD',
+  EMPLOYEE: 'EMPLOYEE', DEV: 'EMPLOYEE', STAFF: 'EMPLOYEE', INDIVIDUALCONTRIBUTOR: 'EMPLOYEE', USER: 'EMPLOYEE',
+  MANAGEMENT: 'MANAGEMENT', MGMT: 'MANAGEMENT', EXECUTIVE: 'MANAGEMENT', EXEC: 'MANAGEMENT',
+  COO: 'MANAGEMENT', CEO: 'MANAGEMENT',
+};
+
+function normalizeRole(role: unknown): UserRole | null {
+  if (typeof role !== 'string') return null;
+  return ROLE_ALIASES[role.trim().toUpperCase().replace(/[\s\-_]+/g, '')] || null;
+}
+
 /**
  * GET /api/auth/demo-users
- * Returns list of seeded demo personas for fast role-testing
+ * Lists active accounts for the staging persona switcher.
  */
-authRouter.get('/demo-users', async (_req: Request, res: Response) => {
-  try {
-    const usersCol = getDbCollection('users');
-    const allUsers = await (await usersCol.find({ active: true })).toArray();
-
-    const safeDemoUsers = allUsers.map((u: any) => ({
-      id: u.id,
-      email: u.email,
-      name: u.name,
-      role: u.role,
-      employeeId: u.employeeId,
-    }));
-
-    res.json(safeDemoUsers);
-  } catch (error: any) {
-    res.status(500).json({ error: 'Failed to fetch demo personas.' });
+authRouter.get(
+  '/demo-users',
+  authenticateToken,
+  requireDemoPersonaAccess,
+  async (_req: AuthenticatedRequest, res: Response) => {
+    try {
+      const users = await (await getDbCollection('users').find({ active: true })).toArray();
+      res.json(
+        users.map((u: any) => ({ id: u.id, email: u.email, name: u.name, role: u.role, employeeId: u.employeeId }))
+      );
+    } catch {
+      res.status(500).json({ error: 'Failed to fetch demo personas.' });
+    }
   }
-});
+);
 
 /**
  * POST /api/auth/switch-role
- * Rapid role switcher for seamless evaluation across Super Admin, HR, Manager, HOD, Employee, Management
+ * Issues a session for an existing account (by userId, or the first active account holding
+ * the requested role). Never creates accounts and never falls back to another role.
  */
-authRouter.post('/switch-role', async (req: Request, res: Response) => {
-  try {
-    // Production Security Guard: Persona switching is strictly for development/staging environments
-    if (process.env.NODE_ENV === 'production') {
-      return res.status(403).json({ error: 'Role switching is strictly prohibited in production mode.' });
-    }
-
-    const { role, userId } = req.body || {};
-    const usersCol = getDbCollection('users');
-    let allUsers: any[] = [];
+authRouter.post(
+  '/switch-role',
+  authenticateToken,
+  requireDemoPersonaAccess,
+  async (req: AuthenticatedRequest, res: Response) => {
     try {
-      allUsers = await (await usersCol.find({})).toArray();
-    } catch {
-      allUsers = [];
-    }
+      const { role, userId } = req.body || {};
+      const adminId: string = res.locals.adminId;
+      const usersCol = getDbCollection('users');
 
-    if (allUsers.length === 0) {
-      allUsers = [];
-    }
-
-    // Standardize role aliases (e.g. 'ADMIN', 'super_admin', 'EMPLOYEE', 'HR Manager', 'Hiring Manager')
-    const roleNormalized = typeof role === 'string' ? role.trim().toUpperCase() : '';
-    const cleaned = roleNormalized.replace(/[\s\-_]+/g, '');
-    let targetRole: UserRole | string = roleNormalized;
-    const targetEmail: string | null = null;
-
-    if (['ADMIN', 'SUPERADMIN', 'SYSTEMADMIN'].includes(cleaned)) {
-      targetRole = 'SUPER_ADMIN';
-    } else if (['HR', 'HRMANAGER', 'HRLEAD', 'HRBP', 'HRADMIN', 'HUMANRESOURCES'].includes(cleaned)) {
-      targetRole = 'HR';
-    } else if (['MGR', 'MANAGER', 'REPORTINGMANAGER', 'ENGMANAGER', 'HIRINGMANAGER', 'TAMANAGER'].includes(cleaned)) {
-      targetRole = 'MANAGER';
-    } else if (['HOD', 'HEADOFORGANIZATION', 'HEADOFORGANISATION', 'HEADOFDEPARTMENT', 'DEPTHEAD', 'DEPARTMENTHEAD'].includes(cleaned)) {
-      targetRole = 'HOD';
-    } else if (['EMPLOYEE', 'DEV', 'STAFF', 'INDIVIDUALCONTRIBUTOR', 'USER'].includes(cleaned)) {
-      targetRole = 'EMPLOYEE';
-    } else if (['MANAGEMENT', 'MGMT', 'EXECUTIVE', 'EXEC', 'COO', 'CEO'].includes(cleaned)) {
-      targetRole = 'MANAGEMENT';
-    }
-
-    let targetUser: any = null;
-
-    // 0. If targetEmail is specified (e.g. Hiring Manager)
-    if (targetEmail) {
-      targetUser = allUsers.find((u: any) => u.email && u.email.toLowerCase() === targetEmail!.toLowerCase());
-    }
-
-    // 1. Try matching by specific userId, _id, employeeId, or email
-    if (!targetUser && userId) {
-      const uStr = String(userId).trim().toLowerCase();
-      targetUser = allUsers.find(
-        (u: any) =>
-          (u.id && u.id.toLowerCase() === uStr) ||
-          (u._id && String(u._id).toLowerCase() === uStr) ||
-          (u.employeeId && u.employeeId.toLowerCase() === uStr) ||
-          (u.email && u.email.toLowerCase() === uStr)
-      );
-
-      // If user wasn't in users table, check if userId corresponds to an employee
-      if (!targetUser) {
-        const employeesCol = getDbCollection('employees');
-        const emp = await employeesCol.findOne({
-          $or: [{ id: userId }, { employeeCode: userId }, { email: uStr }],
+      let targetUser: any = null;
+      if (typeof userId === 'string' && userId.trim()) {
+        const id = userId.trim();
+        targetUser = await usersCol.findOne({
+          $or: [{ id }, { employeeId: id }, { email: id.toLowerCase() }],
         });
-        if (emp) {
-          // Check if existing user has this employeeId or email
-          const existingUser = allUsers.find(
-            (u: any) => (u.employeeId && u.employeeId === emp.id) || (u.email && u.email.toLowerCase() === emp.email.toLowerCase())
-          );
-          if (existingUser) {
-            targetUser = existingUser;
-          } else {
-            // Determine default role based on designation
-            let inferredRole: UserRole = 'EMPLOYEE';
-            if (emp.designationName?.toLowerCase().includes('hr manager')) inferredRole = 'HR';
-            else if (emp.designationName?.toLowerCase().includes('manager')) inferredRole = 'MANAGER';
-            else if (emp.designationName?.toLowerCase().includes('vp') || emp.designationName?.toLowerCase().includes('director') || emp.designationName?.toLowerCase().includes('hod')) inferredRole = 'HOD';
-            
-            targetUser = {
-              id: `usr_${emp.id}`,
-              employeeId: emp.id,
-              email: emp.email,
-              name: emp.name,
-              role: (targetRole as UserRole) || inferredRole,
-              roleId: `role_${inferredRole.toLowerCase()}`,
-              active: true,
-              createdAt: emp.createdAt || new Date().toISOString(),
-            };
-          }
+      } else {
+        const targetRole = normalizeRole(role);
+        if (!targetRole) {
+          return res.status(400).json({ error: 'A valid role or userId is required.' });
         }
+        targetUser = targetRole === 'SUPER_ADMIN'
+          ? await usersCol.findOne({ id: adminId })
+          : await usersCol.findOne({ role: targetRole, active: true });
       }
-    }
 
-    // Special match for HR role
-    if (!targetUser && targetRole === 'HR') {
-      targetUser =
-        allUsers.find((u: any) => u.role === 'HR') ||
-        allUsers.find((u: any) => u.email === 'frank.mgr@company.com');
-    }
+      if (!targetUser || targetUser.active === false) {
+        return res.status(404).json({ error: 'No active account found for the requested persona.' });
+      }
 
-    // 2. If not matched by userId, match by normalized target role
-    if (!targetUser && targetRole) {
-      targetUser = allUsers.find((u: any) => u.role === targetRole);
-    }
+      // Returning to the admin's own account ends the impersonation.
+      const tokenOpts = targetUser.id === adminId ? {} : { impersonatorId: adminId };
+      const tokenVersion = targetUser.tokenVersion ?? 1;
+      const token = generateAccessToken(targetUser, tokenOpts);
+      const refreshToken = generateRefreshToken(targetUser, tokenVersion, tokenOpts);
 
-    // 3. If still not matched, case-insensitive match on role
-    if (!targetUser && roleNormalized) {
-      targetUser = allUsers.find(
-        (u: any) => u.role && u.role.toString().toUpperCase() === roleNormalized
+      const employeeProfile: Employee | null = targetUser.employeeId
+        ? await getDbCollection('employees').findOne({ id: targetUser.employeeId })
+        : null;
+      const roleRecord: Role | null = await getDbCollection('roles').findOne({ roleName: targetUser.role });
+
+      await recordAuditLog(
+        adminId,
+        req.user!.name,
+        req.user!.role,
+        'AUTHENTICATION',
+        'PERSONA_SWITCH',
+        targetUser.id,
+        req.user!.id,
+        targetUser.id,
+        `Demo persona switch to ${targetUser.email} (${targetUser.role}) by admin ${adminId}`
       );
+
+      const safeUser: User = {
+        id: targetUser.id,
+        employeeId: targetUser.employeeId,
+        email: targetUser.email,
+        name: targetUser.name,
+        role: targetUser.role,
+        roleId: targetUser.roleId,
+        active: targetUser.active ?? true,
+        avatarUrl: targetUser.avatarUrl,
+        lastLoginAt: new Date().toISOString(),
+        tokenVersion,
+        createdAt: targetUser.createdAt,
+      };
+
+      res.json({
+        token,
+        refreshToken,
+        user: safeUser,
+        employeeProfile,
+        permissions: roleRecord ? roleRecord.permissions : [],
+      });
+    } catch (error: any) {
+      console.error('Failed to switch role:', error);
+      res.status(500).json({ error: 'Failed to switch role.' });
     }
-
-    // 4. Final fallback to Super Admin or first available user
-    if (!targetUser) {
-      targetUser =
-        allUsers.find((u: any) => u.role === 'SUPER_ADMIN') ||
-        allUsers[0];
-    }
-
-    if (!targetUser) {
-      return res.status(404).json({ error: 'Demo user not found for requested role.' });
-    }
-
-    const tokenVersion = targetUser.tokenVersion ?? 1;
-    const token = generateAccessToken(targetUser);
-    const refreshToken = generateRefreshToken(targetUser, tokenVersion);
-
-    let employeeProfile: Employee | null = null;
-    if (targetUser.employeeId) {
-      const employeesCol = getDbCollection('employees');
-      try {
-        employeeProfile = await employeesCol.findOne({ id: targetUser.employeeId });
-      } catch {
-        employeeProfile = null;
-      }
-    }
-
-    const rolesCol = getDbCollection('roles');
-    let roleRecord: Role | null = null;
-    try {
-      roleRecord = await rolesCol.findOne({ roleName: targetUser.role });
-    } catch {
-      roleRecord = null;
-    }
-
-    const safeUser: User = {
-      id: targetUser.id,
-      employeeId: targetUser.employeeId,
-      email: targetUser.email,
-      name: targetUser.name,
-      role: targetUser.role,
-      roleId: targetUser.roleId,
-      active: targetUser.active ?? true,
-      avatarUrl: targetUser.avatarUrl,
-      lastLoginAt: new Date().toISOString(),
-      tokenVersion: tokenVersion,
-      createdAt: targetUser.createdAt,
-    };
-
-    console.log(`[Auth] Persona switched: "${targetUser.name}" (${targetUser.email}) [Role: ${targetUser.role}]`);
-
-    res.json({
-      token,
-      refreshToken,
-      user: safeUser,
-      employeeProfile,
-      permissions: roleRecord ? roleRecord.permissions : [],
-    });
-  } catch (error: any) {
-    console.error('Failed to switch role:', error);
-    res.status(500).json({ error: 'Failed to switch role.' });
   }
-});
+);
+
 
 /**
  * POST /api/auth/logout
@@ -464,22 +393,9 @@ authRouter.post('/logout', async (req: AuthenticatedRequest, res: Response) => {
 });
 
 /**
- * GET /api/system/db-status
- * Health & MongoDB Compass connectivity diagnostics
- */
-authRouter.get('/system/db-status', async (_req: Request, res: Response) => {
-  try {
-    const status = await getDatabaseStatus();
-    res.json(status);
-  } catch (error: any) {
-    res.status(500).json({ error: 'Failed to fetch database diagnostics.' });
-  }
-});
-
-/**
  * POST /api/auth/refresh
  * Exchanges a valid, unrevoked Refresh Token for a fresh short-lived Access Token
- * and rotated Refresh Token. Also supports backward-compatibility with unexpired access tokens.
+ * and rotated Refresh Token. Only genuine refresh tokens are accepted.
  */
 authRouter.post('/refresh', async (req: Request, res: Response) => {
   try {
@@ -491,14 +407,9 @@ authRouter.post('/refresh', async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Refresh token is required.' });
     }
 
-    // 1. First attempt verification as a dedicated refresh token (checks tokenVersion revocation)
+    // Verify as a dedicated refresh token (signature, type and tokenVersion revocation)
     const refreshResult = await verifyRefreshToken(refreshToken);
-    let user: User | null = refreshResult?.user || null;
-
-    // 2. Backward compatibility fallback: if passed an unexpired access token, verify it
-    if (!user) {
-      user = await verifyTokenString(refreshToken);
-    }
+    const user: User | null = refreshResult?.user || null;
 
     if (!user || user.active === false) {
       console.warn('[Auth] Token refresh failed: Session has expired or been revoked');
@@ -511,8 +422,9 @@ authRouter.post('/refresh', async (req: Request, res: Response) => {
     console.log(`[Auth] Session refreshed for "${user.name}" (${user.email}) [Role: ${user.role}]`);
 
     const currentVersion = user.tokenVersion ?? 1;
-    const newAccessToken = generateAccessToken(user);
-    const newRefreshToken = generateRefreshToken(user, currentVersion);
+    const tokenOpts = refreshResult?.impersonatorId ? { impersonatorId: refreshResult.impersonatorId } : {};
+    const newAccessToken = generateAccessToken(user, tokenOpts);
+    const newRefreshToken = generateRefreshToken(user, currentVersion, tokenOpts);
 
     // Fetch employee profile if exists
     let employeeProfile: Employee | null = null;
@@ -598,39 +510,6 @@ authRouter.post('/revoke-sessions', authenticateToken, async (req: Authenticated
     });
   } catch (err: any) {
     res.status(500).json({ error: 'Failed to revoke sessions.' });
-  }
-});
-
-/**
- * POST /api/auth/logout
- * Securely signs out the user and revokes their active sessions and refresh tokens on the server
- */
-authRouter.post('/logout', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    if (req.user?.id) {
-      await revokeUserSessions(req.user.id);
-
-      await recordAuditLog(
-        req.user.id,
-        req.user.name,
-        req.user.role,
-        'AUTHENTICATION',
-        'LOGOUT',
-        req.user.id,
-        '',
-        '',
-        `User ${req.user.email} signed out and active session tokens were revoked.`
-      );
-      console.log(`[Auth] User signed out: "${req.user.name}" (${req.user.email})`);
-    }
-
-    res.json({
-      success: true,
-      message: 'Logged out successfully and server session was invalidated.',
-    });
-  } catch (err: any) {
-    console.error('Logout error:', err);
-    res.status(500).json({ error: 'Failed to complete logout.' });
   }
 });
 

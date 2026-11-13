@@ -48,7 +48,8 @@ function normalizeAuditLog(doc: any): AuditLogEntry {
     severity: doc.severity || 'INFO',
     actorId: doc.actorId || doc.userId || 'usr_system',
     actorName: doc.actorName || doc.userName || 'System',
-    actorRole: doc.actorRole || doc.userRole || 'HR',
+    // Unknown values stay unknown (the UI shows "—"); never substitute a plausible-looking default.
+    actorRole: doc.actorRole || doc.userRole || undefined,
     actorEmail: doc.actorEmail,
     targetEmployeeId: doc.targetEmployeeId,
     targetEmployeeName: typeof doc.targetEmployeeName === 'string' ? doc.targetEmployeeName : (doc.targetEmployeeName ? String(doc.targetEmployeeName) : undefined),
@@ -59,7 +60,7 @@ function normalizeAuditLog(doc: any): AuditLogEntry {
     previousValue: doc.previousValue ?? doc.oldValue,
     newValue: doc.newValue ?? doc.newValue,
     diffSummary: typeof doc.diffSummary === 'string' ? doc.diffSummary : (doc.diffSummary ? JSON.stringify(doc.diffSummary) : undefined),
-    ipAddress: doc.ipAddress || '127.0.0.1',
+    ipAddress: doc.ipAddress || undefined,
     userAgent: doc.userAgent,
     isFlaggedCompliance: doc.isFlaggedCompliance || false,
     metadata: doc.metadata,
@@ -294,13 +295,17 @@ auditRouter.get('/timeline/:employeeId', async (req: AuthenticatedRequest, res: 
 
     // Stage 1: KRA & KPI Initialization
     const hasKras = !!(template || employee.currentKraTemplateId || reviews.length > 0);
-    const kraItemsCount = template?.items?.length || template?.kras?.length || 4;
-    const totalWeight = template?.totalWeight || 100;
+    // Real values only: no assumed KRA count, weight or date when the template/record lacks them.
+    const templateItems: any[] = template?.items || template?.kras || [];
+    const kraItemsCount = templateItems.length;
+    const totalWeight =
+      template?.totalWeight ??
+      (kraItemsCount ? templateItems.reduce((sum, k) => sum + (Number(k.weight) || 0), 0) : undefined);
     events.push({
       id: `tl_${employee.id}_kra`,
       stageName: 'KRA & KPI Initialization',
       stageKey: 'KRA_SETUP',
-      timestamp: employee.createdAt || '2025-10-01T09:00:00.000Z',
+      timestamp: employee.createdAt || undefined,
       actorName: employee.managerName || 'HR Operations',
       actorRole: 'HR',
       status: hasKras ? 'COMPLETED' : 'PENDING',
@@ -308,12 +313,14 @@ auditRouter.get('/timeline/:employeeId', async (req: AuthenticatedRequest, res: 
         ? `KRAs Assigned for ${employee.cycleName || employee.cycleCode || 'Performance Cycle'}`
         : 'KRA Assignment Pending',
       description: hasKras
-        ? `${kraItemsCount} weighted KRAs allocated with ${totalWeight}% total weight matching ${employee.designationName || 'Designation'} profile.`
+        ? kraItemsCount
+          ? `${kraItemsCount} weighted KRA${kraItemsCount === 1 ? '' : 's'} allocated${totalWeight !== undefined ? ` with ${totalWeight}% total weight` : ''}.`
+          : 'KRAs allocated.'
         : 'Awaiting KRA allocation and goal definition for performance cycle.',
       details: {
         totalKras: kraItemsCount,
         totalWeight,
-        templateTitle: template?.title || template?.name || 'Role Standard Profile',
+        templateTitle: template?.title || template?.name || undefined,
       },
     });
 
@@ -611,29 +618,24 @@ auditRouter.get('/compliance-health', async (_req: AuthenticatedRequest, res: Re
     const riskLevel: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL' =
       riskScore > 65 ? 'CRITICAL' : riskScore > 35 ? 'HIGH' : riskScore > 15 ? 'MODERATE' : 'LOW';
 
-    // Department breakdown
-    const departmentRiskBreakdown = [
-      {
-        department: 'Engineering & Technology',
-        riskScore: 42,
-        flagsCount: 1,
-      },
-      {
-        department: 'Sales & Business Development',
-        riskScore: 58,
-        flagsCount: 2,
-      },
-      {
-        department: 'Product & Design',
-        riskScore: 8,
-        flagsCount: 0,
-      },
-      {
-        department: 'Finance & Operations',
-        riskScore: 5,
-        flagsCount: 0,
-      },
-    ];
+    // Department breakdown from the active flags themselves, using the same weights as the
+    // overall score (critical 25, warning 12). Flags with no department are grouped as such.
+    const byDepartment = new Map<string, { critical: number; warning: number; total: number }>();
+    for (const f of activeFlags as any[]) {
+      const dept = String(f.targetDepartment || f.departmentName || f.department || 'No department');
+      const entry = byDepartment.get(dept) || { critical: 0, warning: 0, total: 0 };
+      entry.total++;
+      if (f.severity === 'CRITICAL') entry.critical++;
+      else if (f.severity === 'WARNING') entry.warning++;
+      byDepartment.set(dept, entry);
+    }
+    const departmentRiskBreakdown = [...byDepartment.entries()]
+      .map(([department, e]) => ({
+        department,
+        riskScore: Math.min(100, e.critical * 25 + e.warning * 12),
+        flagsCount: e.total,
+      }))
+      .sort((a, b) => b.riskScore - a.riskScore);
 
     const report: ComplianceRiskReport = {
       overallRiskScore: riskScore,
@@ -696,8 +698,8 @@ auditRouter.post('/flags/:flagId/resolve', async (req: AuthenticatedRequest, res
     const resolveLog: AuditLogEntry = {
       id: `aud_${Date.now()}`,
       timestamp: now,
-      actionType: 'SECURITY_ROLE_CHANGED',
-      module: 'CYCLE_ADMIN',
+      actionType: 'COMPLIANCE_FLAG_RESOLVED',
+      module: 'COMPLIANCE',
       severity: 'INFO',
       actorId: req.user?.id || 'usr_admin',
       actorName: req.user?.name || 'Administrator',
@@ -705,7 +707,7 @@ auditRouter.post('/flags/:flagId/resolve', async (req: AuthenticatedRequest, res
       actorEmail: req.user?.email,
       description: `Resolved Compliance Flag [${existingFlag.title}]: ${note}`,
       diffSummary: `Flag ${flagId} marked as RESOLVED by ${resolvedBy}`,
-      ipAddress: req.ip || '127.0.0.1',
+      ipAddress: req.ip,
       userAgent: req.headers['user-agent'],
       isFlaggedCompliance: false,
     };

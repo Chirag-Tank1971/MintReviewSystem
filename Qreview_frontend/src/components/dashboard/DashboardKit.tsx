@@ -3,6 +3,8 @@ import { CheckCircle2, ChevronRight } from 'lucide-react';
 import type { DashboardTask, DashboardTaskLink } from '../../types';
 import { api } from '../../services/api';
 import { cn } from '../../utils/cn';
+import { useAuth } from '../../context/AuthContext';
+import { isViewPermitted, type AppView } from '../../hooks/useUrlHashView';
 import { dueLabel } from './format';
 
 /* Small, shared building blocks for the role dashboards. Kept deliberately plain:
@@ -196,6 +198,11 @@ export const TodoCard: React.FC<{
   title?: string;
 }> = ({ tasks, alerts = [], onNavigate, limit = 6, className, title = 'To do' }) => {
   const [expanded, setExpanded] = useState(false);
+  const { user } = useAuth();
+  // A server-supplied link is only clickable when this role can actually open that page;
+  // otherwise the item still shows (it carries information) but isn't a dead link.
+  const go = (link?: DashboardTaskLink) =>
+    link && isViewPermitted(link.view as AppView, user?.role) ? () => onNavigate(link.view, link.params) : undefined;
   const workTasks = tasks.filter(isWorkTask);
   const unreadNotifications = tasks.length - workTasks.length;
 
@@ -215,7 +222,7 @@ export const TodoCard: React.FC<{
         detail: perPerson.map((t) => t.employeeName).join(', '),
         level: worst,
         badge: worst === 'bad' ? 'Overdue' : worst === 'warn' ? 'Due soon' : null,
-        onClick: () => onNavigate(first.link.view, first.link.view === 'reviews' ? undefined : first.link.params),
+        onClick: go(first.link.view === 'reviews' ? { ...first.link, params: undefined } : first.link),
       });
       singles.push(...list.filter((t) => !perPerson.includes(t)));
     } else {
@@ -240,17 +247,21 @@ export const TodoCard: React.FC<{
         ? 'warn'
         : 'normal',
       badge: t.notificationId ? 'New' : dueLabel(t.urgency, t.dueDate) || t.dueText || null,
-      onClick: () => {
-        if (t.notificationId) api.markNotificationRead(t.notificationId).catch(() => {});
-        onNavigate(t.link.view, t.link.params);
-      },
+      onClick: (() => {
+        const open = go(t.link);
+        if (!open) return undefined;
+        return () => {
+          if (t.notificationId) api.markNotificationRead(t.notificationId).catch(() => {});
+          open();
+        };
+      })(),
     })),
     ...alerts.map<TodoItem>((a) => ({
       key: a.id,
       title: a.title,
       detail: a.detail,
       level: a.type === 'crit' ? 'bad' : a.type === 'warn' ? 'warn' : 'info',
-      onClick: a.link ? () => onNavigate(a.link!.view, a.link!.params) : undefined,
+      onClick: go(a.link),
     })),
   ].sort((a, b) => LEVEL_ORDER[a.level] - LEVEL_ORDER[b.level]);
 

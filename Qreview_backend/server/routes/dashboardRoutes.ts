@@ -900,9 +900,8 @@ async function buildHodOverview(
       id: 'hod_kra_coverage',
       type: 'info',
       title: `KRA coverage at ${kraCoverageRate}% in your department`,
-      detail: 'Some team members lack KRA templates.',
-      actionLabel: 'View',
-      link: { view: 'kras' },
+      // HODs can't open KRA templates, so this is informational (no dead link).
+      detail: 'Some team members have no KRA scorecard. Ask HR to assign one.',
     });
   }
 

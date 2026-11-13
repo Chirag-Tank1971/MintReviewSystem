@@ -391,6 +391,20 @@ const MONGO_COLLECTION_MAP: Record<string, string> = {
   salesChampsReports: 'sales_champs_reports',
 };
 
+/** Which storage engine is active. Maintenance scripts must refuse to run on the embedded fallback. */
+export function getDbMode(): 'MONGODB' | 'EMBEDDED_COMPATIBLE' {
+  return dbMode;
+}
+
+/** Closes the MongoDB connection (used by one-off scripts so the process can exit). */
+export async function closeDatabase(): Promise<void> {
+  if (mongoClient) {
+    await mongoClient.close();
+    mongoClient = null;
+    mongoDb = null;
+  }
+}
+
 export function getDbCollection(collectionName: keyof typeof memoryDb): any {
   if (dbMode === 'MONGODB' && mongoDb) {
     const mapped = MONGO_COLLECTION_MAP[collectionName] || collectionName;

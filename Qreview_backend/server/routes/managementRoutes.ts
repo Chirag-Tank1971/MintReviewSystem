@@ -466,8 +466,8 @@ managementRouter.get(
   '/management/performance/trends',
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { year = 2026, departmentId, cycleId } = req.query;
-      const targetYear = Number(year) || 2026;
+      const { year, departmentId, cycleId } = req.query;
+      const targetYear = Number(year) || new Date().getFullYear();
 
       const reviewCol = getDbCollection('employeeReviews');
       const periodCol = getDbCollection('reviewPeriods');
@@ -759,8 +759,8 @@ managementRouter.get(
   '/management/appraisals/summary',
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { year = 2026, cycleId, departmentId } = req.query;
-      const targetYear = Number(year) || 2026;
+      const { year, cycleId, departmentId } = req.query;
+      const targetYear = Number(year) || new Date().getFullYear();
 
       const appraisalCol = getDbCollection('appraisals');
       const deptCol = getDbCollection('departments');
@@ -986,7 +986,7 @@ managementRouter.get(
         .filter((r) => typeof r.finalScore === 'number' && r.finalScore > 0)
         .map((r) => ({
           quarter: r.reviewPeriodName || 'Quarterly Review',
-          year: (r as any).cycleYear || (r as any).year || 2026,
+          year: (r as any).cycleYear || (r as any).year || new Date(r.createdAt).getFullYear(),
           score: r.finalScore as number,
           status: r.status,
           date: r.createdAt,

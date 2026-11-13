@@ -162,11 +162,17 @@ reportRouter.get('/reports/pending-overdue', async (req: AuthenticatedRequest, r
       reviews = reviews.filter((r) => r.cycleId === cycleId || r.cycleCode === cycleId);
     }
 
+    const periods: ReviewPeriod[] = await (await getDbCollection('reviewPeriods').find({})).toArray();
+    const periodMap = new Map(periods.map((p) => [p.id, p]));
+
     const now = new Date();
     const reportData = reviews.map((r) => {
       const emp = empMap.get(r.employeeId);
       const createdAt = new Date(r.createdAt || Date.now());
       const daysAging = Math.max(1, Math.floor((now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24)));
+      // The review period's configured due date; null when the period has none.
+      const dueDate = periodMap.get(r.reviewPeriodId)?.dueDate || null;
+      const dueEnd = dueDate ? new Date(`${String(dueDate).slice(0, 10)}T23:59:59`) : null;
 
       let pendingWith = 'Reporting Manager';
       if (r.status === 'HR_PENDING' || r.status === 'MANAGER_COMPLETED') {
@@ -188,8 +194,9 @@ reportRouter.get('/reports/pending-overdue', async (req: AuthenticatedRequest, r
         status: r.status,
         pendingWith,
         daysAging,
-        isOverdue: daysAging > 15,
-        dueDate: '2026-09-30',
+        // Overdue = past the period's due date; without one, fall back to the 15-day ageing rule.
+        isOverdue: dueEnd && !isNaN(dueEnd.getTime()) ? now > dueEnd : daysAging > 15,
+        dueDate,
         lastActionDate: r.updatedAt || r.createdAt,
       };
     });
@@ -475,7 +482,8 @@ reportRouter.get('/reports/appraisal-due', async (req: AuthenticatedRequest, res
     const { employees: scopedEmployees, reviews } = await getScopedReportData(req);
     const cycles: Cycle[] = await (await cyclesCol.find({})).toArray();
 
-    const targetYear = year ? parseInt(year as string, 10) : 2026;
+    const parsedYear = year ? parseInt(year as string, 10) : NaN;
+    const targetYear = Number.isFinite(parsedYear) ? parsedYear : new Date().getFullYear();
     const cycleMap = new Map(cycles.map((c) => [c.id, c]));
 
     let eligibleEmployees = scopedEmployees.filter((e) => e.status === 'ACTIVE');
@@ -575,18 +583,29 @@ reportRouter.get('/reports/rating-trend', async (req: AuthenticatedRequest, res:
 
     const periodMap = new Map(periods.map((p) => [p.id, p]));
 
-    const quarters = [
-      { name: 'Q1 2026', quarter: 1 },
-      { name: 'Q2 2026', quarter: 2 },
-      { name: 'Q3 2026', quarter: 3 },
-      { name: 'Q4 2026', quarter: 4 },
-    ];
+    // Bucket each review by its real (year, quarter): from its review period, or parsed from the
+    // period name (e.g. "Q2 2025") for older records. Years are never merged together.
+    const MAX_TREND_QUARTERS = 8;
+    const quarterKeyOf = (r: EmployeeReview): { year: number; quarter: number } | null => {
+      const p = periodMap.get(r.reviewPeriodId);
+      if (p?.year && p?.quarter) return { year: Number(p.year), quarter: Number(p.quarter) };
+      const m = /Q([1-4])\D*(\d{4})/i.exec(r.reviewPeriodName || '');
+      return m ? { year: Number(m[2]), quarter: Number(m[1]) } : null;
+    };
+    const buckets = new Map<string, { year: number; quarter: number; reviews: EmployeeReview[] }>();
+    for (const r of reviews) {
+      const k = quarterKeyOf(r);
+      if (!k) continue;
+      const key = `${k.year}-${k.quarter}`;
+      if (!buckets.has(key)) buckets.set(key, { ...k, reviews: [] });
+      buckets.get(key)!.reviews.push(r);
+    }
+    const quarters = [...buckets.values()]
+      .sort((a, b) => a.year - b.year || a.quarter - b.quarter)
+      .slice(-MAX_TREND_QUARTERS);
 
     const trends = quarters.map((q) => {
-      const qReviews = reviews.filter((r) => {
-        const p = periodMap.get(r.reviewPeriodId);
-        return p?.quarter === q.quarter || r.reviewPeriodName?.includes(`Q${q.quarter}`);
-      });
+      const qReviews = q.reviews;
 
       const scored = qReviews.filter((r) => r.finalScore && r.finalScore > 0);
       const avg =
@@ -613,7 +632,7 @@ reportRouter.get('/reports/rating-trend', async (req: AuthenticatedRequest, res:
       });
 
       return {
-        quarter: q.name,
+        quarter: `Q${q.quarter} ${q.year}`,
         totalReviews: qReviews.length,
         averageScore: avg,
         distribution: { outstanding, exceeds, meets, needsImp },

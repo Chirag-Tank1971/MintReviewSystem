@@ -145,7 +145,12 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
 /**
  * Generates a short-lived access token (15 minutes)
  */
-export function generateAccessToken(user: User): string {
+export interface TokenOptions {
+  /** Set when a SUPER_ADMIN is acting as another persona (staging demo switcher only). */
+  impersonatorId?: string;
+}
+
+export function generateAccessToken(user: User, opts: TokenOptions = {}): string {
   return jwt.sign(
     {
       id: user.id,
@@ -154,6 +159,7 @@ export function generateAccessToken(user: User): string {
       name: user.name,
       employeeId: user.employeeId,
       type: 'access',
+      ...(opts.impersonatorId ? { impersonatorId: opts.impersonatorId } : {}),
     },
     JWT_SECRET,
     { expiresIn: ACCESS_TOKEN_EXPIRY }
@@ -163,13 +169,14 @@ export function generateAccessToken(user: User): string {
 /**
  * Generates a long-lived refresh token (7 days) tied to the user's current tokenVersion
  */
-export function generateRefreshToken(user: User, tokenVersion: number = 1): string {
+export function generateRefreshToken(user: User, tokenVersion: number = 1, opts: TokenOptions = {}): string {
   return jwt.sign(
     {
       id: user.id,
       email: user.email,
       tokenVersion,
       type: 'refresh',
+      ...(opts.impersonatorId ? { impersonatorId: opts.impersonatorId } : {}),
     },
     JWT_REFRESH_SECRET,
     { expiresIn: REFRESH_TOKEN_EXPIRY }
@@ -179,7 +186,9 @@ export function generateRefreshToken(user: User, tokenVersion: number = 1): stri
 /**
  * Verifies a refresh token and checks that the user's tokenVersion has not been revoked
  */
-export async function verifyRefreshToken(refreshToken: string): Promise<{ user: User; tokenVersion: number } | null> {
+export async function verifyRefreshToken(
+  refreshToken: string
+): Promise<{ user: User; tokenVersion: number; impersonatorId?: string } | null> {
   try {
     const decoded = jwt.verify(refreshToken, JWT_REFRESH_SECRET) as any;
     if (!decoded || decoded.type !== 'refresh' || !decoded.id) {
@@ -202,10 +211,54 @@ export async function verifyRefreshToken(refreshToken: string): Promise<{ user: 
       return null;
     }
 
-    return { user, tokenVersion: currentVersion };
+    return {
+      user,
+      tokenVersion: currentVersion,
+      impersonatorId: typeof decoded.impersonatorId === 'string' ? decoded.impersonatorId : undefined,
+    };
   } catch (err) {
     return null;
   }
+}
+
+/**
+ * Returns the impersonator (original SUPER_ADMIN) id carried by a valid access token, if any.
+ */
+export function getImpersonatorId(accessToken: string | undefined): string | null {
+  if (!accessToken) return null;
+  try {
+    const decoded = jwt.verify(accessToken, JWT_SECRET) as any;
+    return typeof decoded?.impersonatorId === 'string' ? decoded.impersonatorId : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Returns the authenticated user id carried by a valid access token, without touching the
+ * database. Used for cheap per-user rate-limit keys.
+ */
+export function getTokenSubject(accessToken: string | undefined): string | null {
+  if (!accessToken) return null;
+  try {
+    const decoded = jwt.verify(accessToken, JWT_SECRET) as any;
+    return decoded?.type === 'access' && typeof decoded.id === 'string' ? decoded.id : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Single source of truth for mapping an employee designation to a default application role.
+ * Used when provisioning accounts (backfill script); never used to grant access at login.
+ */
+export function inferRoleFromDesignation(designationName: string | undefined | null): UserRole {
+  const d = (designationName || '').toLowerCase();
+  if (d.includes('hr manager') || d.includes('hr lead')) return 'HR';
+  // Order matches the legacy login-time inference so backfilled accounts get the same roles.
+  if (d.includes('manager') || d.includes('lead')) return 'MANAGER';
+  if (d.includes('vp') || d.includes('director') || d.includes('hod')) return 'HOD';
+  return 'EMPLOYEE';
 }
 
 /**

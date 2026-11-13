@@ -68,12 +68,21 @@ function cleanSnapshotPayload<T extends { kraSnapshot?: ReviewKraSnapshot[] }>(d
 }
 
 let isRefreshing = false;
-let refreshSubscribers: Array<(token: string) => void> = [];
+/** Requests that hit 401 while a refresh was already in flight. null token = refresh failed. */
+let refreshSubscribers: Array<(token: string | null) => void> = [];
 
-function onRefreshed(token: string) {
-  refreshSubscribers.forEach((cb) => cb(token));
+/** Settles every queued request: replays it with the new token, or fails it if refresh failed. */
+function settleQueuedRequests(token: string | null) {
+  const queued = refreshSubscribers;
   refreshSubscribers = [];
+  queued.forEach((cb) => cb(token));
 }
+
+const sessionExpiredResponse = () =>
+  new Response(JSON.stringify({ error: 'Your session has expired. Please sign in again.' }), {
+    status: 401,
+    headers: { 'Content-Type': 'application/json' },
+  });
 
 /**
  * Transparent fetch wrapper with automatic token refresh and failed request replay
@@ -86,6 +95,7 @@ async function fetchWithAutoRefresh(url: string, options: RequestInit = {}): Pro
   }
   options.headers = headers;
 
+  // eslint-disable-next-line no-restricted-globals -- refresh wrapper: the underlying request
   const res = await fetch(url, options);
 
   // If 401 Unauthorized and not an auth endpoint, attempt transparent token refresh
@@ -98,6 +108,7 @@ async function fetchWithAutoRefresh(url: string, options: RequestInit = {}): Pro
     if (!isRefreshing) {
       isRefreshing = true;
       try {
+        // eslint-disable-next-line no-restricted-globals -- the refresh call itself
         const refreshRes = await fetch(`${API_BASE}/auth/refresh`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -113,34 +124,41 @@ async function fetchWithAutoRefresh(url: string, options: RequestInit = {}): Pro
             localStorage.setItem('review_app_refresh_token', data.refreshToken);
           }
           isRefreshing = false;
-          onRefreshed(data.token);
+          settleQueuedRequests(data.token);
 
           // Retry the original request with the fresh token
           const retryHeaders = new Headers(options.headers);
           retryHeaders.set('Authorization', `Bearer ${data.token}`);
           options.headers = retryHeaders;
+          // eslint-disable-next-line no-restricted-globals -- refresh wrapper: replay with the new token
           return fetch(url, options);
-        } else {
-          // Refresh token expired or revoked
-          isRefreshing = false;
-          refreshSubscribers = [];
-          localStorage.removeItem('review_app_token');
-          localStorage.removeItem('review_app_refresh_token');
-          window.dispatchEvent(new CustomEvent('auth:session_expired'));
-          return res;
         }
-      } catch {
+
+        // Refresh token expired or revoked: end the session everywhere
         isRefreshing = false;
-        refreshSubscribers = [];
+        settleQueuedRequests(null);
+        localStorage.removeItem('review_app_token');
+        localStorage.removeItem('review_app_refresh_token');
+        window.dispatchEvent(new CustomEvent('auth:session_expired'));
+        return res;
+      } catch {
+        // Network failure during refresh: fail queued requests rather than leave them hanging
+        isRefreshing = false;
+        settleQueuedRequests(null);
         return res;
       }
     } else {
-      // If refresh is already in flight, queue this request
+      // A refresh is already in flight: wait for it, then replay or fail
       return new Promise<Response>((resolve) => {
-        refreshSubscribers.push((newToken: string) => {
+        refreshSubscribers.push((newToken) => {
+          if (!newToken) {
+            resolve(sessionExpiredResponse());
+            return;
+          }
           const retryHeaders = new Headers(options.headers);
           retryHeaders.set('Authorization', `Bearer ${newToken}`);
           options.headers = retryHeaders;
+          // eslint-disable-next-line no-restricted-globals -- refresh wrapper: replay queued request
           resolve(fetch(url, options));
         });
       });
@@ -225,6 +243,7 @@ async function requestWithDedupeAndCache<T>(
 export const api = {
   // Auth & Session
   async login(email: string, password: string) {
+    // eslint-disable-next-line no-restricted-globals -- login has no session to refresh yet
     const res = await fetch(`${API_BASE}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -280,6 +299,7 @@ export const api = {
 
   async logout() {
     try {
+      // eslint-disable-next-line no-restricted-globals -- logout must not trigger a refresh
       await fetch(`${API_BASE}/auth/logout`, {
         method: 'POST',
         headers: getAuthHeaders(),
@@ -292,7 +312,8 @@ export const api = {
   },
 
   async refreshToken(): Promise<{ token: string; refreshToken?: string; user: User; employeeProfile?: Employee; permissions: string[] }> {
-    const storedRefresh = localStorage.getItem('review_app_refresh_token') || localStorage.getItem('review_app_token');
+    const storedRefresh = localStorage.getItem('review_app_refresh_token');
+    // eslint-disable-next-line no-restricted-globals -- the refresh call itself
     const res = await fetch(`${API_BASE}/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -368,7 +389,7 @@ export const api = {
 
   async createEmployee(data: CreateEmployeePayload): Promise<CreateEmployeeResponse> {
     invalidateApiCache('/employees');
-    const res = await fetch(`${API_BASE}/employees`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/employees`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
@@ -382,7 +403,7 @@ export const api = {
 
   async updateEmployee(id: string, data: UpdateEmployeePayload): Promise<Employee> {
     invalidateApiCache('/employees');
-    const res = await fetch(`${API_BASE}/employees/${id}`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/employees/${id}`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
@@ -399,7 +420,7 @@ export const api = {
     invalidateApiCache('/departments');
     invalidateApiCache('/reviews');
     invalidateApiCache('/appraisals');
-    const res = await fetch(`${API_BASE}/employees/${id}`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/employees/${id}`, {
       method: 'DELETE',
       headers: getAuthHeaders(),
     });
@@ -422,7 +443,7 @@ export const api = {
   async createDepartment(data: { name: string; code: string; hodId?: string; hodName?: string; budgetCapPercent?: number }): Promise<Department> {
     invalidateApiCache('/departments');
     invalidateApiCache('/appraisals');
-    const res = await fetch(`${API_BASE}/departments`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/departments`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
@@ -437,7 +458,7 @@ export const api = {
   async updateDepartment(id: string, data: Partial<Department>): Promise<Department> {
     invalidateApiCache('/departments');
     invalidateApiCache('/appraisals');
-    const res = await fetch(`${API_BASE}/departments/${id}`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/departments/${id}`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
@@ -454,7 +475,7 @@ export const api = {
     invalidateApiCache('/designations');
     invalidateApiCache('/employees');
     invalidateApiCache('/appraisals');
-    const res = await fetch(`${API_BASE}/departments/${id}`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/departments/${id}`, {
       method: 'DELETE',
       headers: getAuthHeaders(),
     });
@@ -476,7 +497,7 @@ export const api = {
 
   async createDesignation(data: { name: string; departmentId: string; level: number }): Promise<Designation> {
     invalidateApiCache('/designations');
-    const res = await fetch(`${API_BASE}/designations`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/designations`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
@@ -491,7 +512,7 @@ export const api = {
   async deleteDesignation(id: string): Promise<{ success: boolean; message: string }> {
     invalidateApiCache('/designations');
     invalidateApiCache('/employees');
-    const res = await fetch(`${API_BASE}/designations/${id}`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/designations/${id}`, {
       method: 'DELETE',
       headers: getAuthHeaders(),
     });
@@ -513,7 +534,7 @@ export const api = {
 
   async createLocation(name: string): Promise<{ success: boolean; message: string }> {
     invalidateApiCache('/locations');
-    const res = await fetch(`${API_BASE}/locations`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/locations`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({ name }),
@@ -527,7 +548,7 @@ export const api = {
 
   async deleteLocation(name: string): Promise<{ success: boolean; message: string }> {
     invalidateApiCache('/locations');
-    const res = await fetch(`${API_BASE}/locations/${encodeURIComponent(name)}`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/locations/${encodeURIComponent(name)}`, {
       method: 'DELETE',
       headers: getAuthHeaders(),
     });
@@ -549,7 +570,7 @@ export const api = {
 
   async updateCycle(id: string, data: Partial<Cycle>): Promise<Cycle> {
     invalidateApiCache('/cycles');
-    const res = await fetch(`${API_BASE}/cycles/${id}`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/cycles/${id}`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
@@ -576,7 +597,7 @@ export const api = {
 
   async createKra(data: Partial<Kra>): Promise<Kra> {
     invalidateApiCache('/kras');
-    const res = await fetch(`${API_BASE}/kras`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/kras`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
@@ -590,7 +611,7 @@ export const api = {
 
   async updateKra(id: string, data: Partial<Kra>): Promise<Kra> {
     invalidateApiCache('/kras');
-    const res = await fetch(`${API_BASE}/kras/${id}`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/kras/${id}`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
@@ -626,7 +647,7 @@ export const api = {
 
   async createKraTemplate(data: Partial<KraTemplate>): Promise<KraTemplate> {
     invalidateApiCache('/kra-templates');
-    const res = await fetch(`${API_BASE}/kra-templates`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/kra-templates`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
@@ -640,7 +661,7 @@ export const api = {
 
   async updateKraTemplate(id: string, data: Partial<KraTemplate>): Promise<KraTemplate> {
     invalidateApiCache('/kra-templates');
-    const res = await fetch(`${API_BASE}/kra-templates/${id}`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/kra-templates/${id}`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
@@ -666,7 +687,7 @@ export const api = {
 
   async createReviewPeriod(data: Partial<ReviewPeriod>): Promise<ReviewPeriod> {
     invalidateApiCache('/review-periods');
-    const res = await fetch(`${API_BASE}/review-periods`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/review-periods`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
@@ -680,7 +701,7 @@ export const api = {
 
   async updateReviewPeriod(id: string, data: Partial<ReviewPeriod>): Promise<ReviewPeriod> {
     invalidateApiCache('/review-periods');
-    const res = await fetch(`${API_BASE}/review-periods/${id}`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/review-periods/${id}`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
@@ -743,7 +764,7 @@ export const api = {
     cycleId?: string;
     overrideExisting?: boolean;
   }): Promise<{ message: string; createdCount: number; skippedCount: number; periodName: string }> {
-    const res = await fetch(`${API_BASE}/reviews/generate-batch`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/reviews/generate-batch`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
@@ -766,7 +787,7 @@ export const api = {
     if (params.cycleId) query.set('cycleId', params.cycleId);
     if (params.overrideExisting) query.set('overrideExisting', 'true');
 
-    const res = await fetch(`${API_BASE}/reviews/generate-batch/preview?${query.toString()}`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/reviews/generate-batch/preview?${query.toString()}`, {
       headers: getAuthHeaders(),
     });
     if (!res.ok) {
@@ -811,7 +832,7 @@ export const api = {
       status: string;
     };
   }> {
-    const res = await fetch(
+    const res = await fetchWithAutoRefresh(
       `${API_BASE}/reviews/check-eligibility?employeeId=${encodeURIComponent(employeeId)}&reviewPeriodId=${encodeURIComponent(reviewPeriodId)}`,
       {
         headers: getAuthHeaders(),
@@ -831,7 +852,7 @@ export const api = {
   }): Promise<{ message: string; review: EmployeeReview }> {
     invalidateApiCache('/reviews');
     invalidateApiCache('/notifications');
-    const res = await fetch(`${API_BASE}/reviews/initiate`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/reviews/initiate`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
@@ -859,7 +880,7 @@ export const api = {
     invalidateApiCache('/reviews');
     invalidateApiCache('/notifications');
     invalidateApiCache('/ess');
-    const res = await fetch(`${API_BASE}/reviews/${id}/score`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/reviews/${id}/score`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(cleanSnapshotPayload(data)),
@@ -889,7 +910,7 @@ export const api = {
     invalidateApiCache('/reviews');
     invalidateApiCache('/notifications');
     invalidateApiCache('/ess');
-    const res = await fetch(`${API_BASE}/reviews/${id}/status`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/reviews/${id}/status`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
@@ -913,7 +934,7 @@ export const api = {
   ): Promise<EmployeeReview> {
     invalidateApiCache('/reviews');
     invalidateApiCache('/notifications');
-    const res = await fetch(`${API_BASE}/reviews/${id}/hod-approve`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/reviews/${id}/hod-approve`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(cleanSnapshotPayload(data || {})),
@@ -931,7 +952,7 @@ export const api = {
   ): Promise<EmployeeReview> {
     invalidateApiCache('/reviews');
     invalidateApiCache('/notifications');
-    const res = await fetch(`${API_BASE}/reviews/${id}/hod-return`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/reviews/${id}/hod-return`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
@@ -944,13 +965,13 @@ export const api = {
   },
 
   async getReturnPolicy(): Promise<ReturnPolicy> {
-    const res = await fetch(`${API_BASE}/reviews/return-policy`, { headers: getAuthHeaders() });
+    const res = await fetchWithAutoRefresh(`${API_BASE}/reviews/return-policy`, { headers: getAuthHeaders() });
     if (!res.ok) throw new Error('Failed to load return policy');
     return res.json();
   },
 
   async updateReturnPolicy(data: Partial<ReturnPolicy>): Promise<ReturnPolicy> {
-    const res = await fetch(`${API_BASE}/reviews/return-policy`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/reviews/return-policy`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
@@ -963,13 +984,13 @@ export const api = {
   },
 
   async getReturnDraft(reviewId: string): Promise<{ draft: ReviewReturnDraft | null; returnCount?: number }> {
-    const res = await fetch(`${API_BASE}/reviews/${reviewId}/return-draft`, { headers: getAuthHeaders() });
+    const res = await fetchWithAutoRefresh(`${API_BASE}/reviews/${reviewId}/return-draft`, { headers: getAuthHeaders() });
     if (!res.ok) return { draft: null };
     return res.json();
   },
 
   async saveReturnDraft(reviewId: string, data: ReturnSelection): Promise<{ draft: ReviewReturnDraft }> {
-    const res = await fetch(`${API_BASE}/reviews/${reviewId}/return-draft`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/reviews/${reviewId}/return-draft`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
@@ -982,11 +1003,11 @@ export const api = {
   },
 
   async deleteReturnDraft(reviewId: string): Promise<void> {
-    await fetch(`${API_BASE}/reviews/${reviewId}/return-draft`, { method: 'DELETE', headers: getAuthHeaders() });
+    await fetchWithAutoRefresh(`${API_BASE}/reviews/${reviewId}/return-draft`, { method: 'DELETE', headers: getAuthHeaders() });
   },
 
   async sendReviewerReminder(reviewerId: string, role: 'MANAGER' | 'HOD'): Promise<{ sentAt: string; pending: number; emailStatus: string }> {
-    const res = await fetch(`${API_BASE}/dashboard/reviewer-reminder`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/dashboard/reviewer-reminder`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({ reviewerId, role }),
@@ -1002,7 +1023,7 @@ export const api = {
   async getReturnAnalyticsReport(params?: { periodId?: string }): Promise<any> {
     const q = new URLSearchParams();
     if (params?.periodId) q.append('periodId', params.periodId);
-    const res = await fetch(`${API_BASE}/reports/return-analytics?${q.toString()}`, { headers: getAuthHeaders() });
+    const res = await fetchWithAutoRefresh(`${API_BASE}/reports/return-analytics?${q.toString()}`, { headers: getAuthHeaders() });
     if (!res.ok) throw new Error('Failed to fetch return analytics report');
     return res.json();
   },
@@ -1064,7 +1085,7 @@ export const api = {
     invalidateApiCache('/appraisals');
     invalidateApiCache('/notifications');
     invalidateApiCache('/ess');
-    const res = await fetch(`${API_BASE}/appraisals/initiate-cycle`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/appraisals/initiate-cycle`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
@@ -1087,7 +1108,7 @@ export const api = {
       strengthsSummary?: string;
     }
   ): Promise<Appraisal> {
-    const res = await fetch(`${API_BASE}/appraisals/${id}/manager-recommend`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/appraisals/${id}/manager-recommend`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
@@ -1100,7 +1121,7 @@ export const api = {
   },
 
   async getAppraisalBudget(id: string): Promise<DepartmentBudgetSnapshot> {
-    const res = await fetch(`${API_BASE}/appraisals/${id}/budget`, { headers: getAuthHeaders() });
+    const res = await fetchWithAutoRefresh(`${API_BASE}/appraisals/${id}/budget`, { headers: getAuthHeaders() });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: 'Failed to load department budget' }));
       throw new Error(err.error || 'Failed to load department budget');
@@ -1117,7 +1138,7 @@ export const api = {
       notes?: string;
     }
   ): Promise<Appraisal> {
-    const res = await fetch(`${API_BASE}/appraisals/${id}/hod-calibrate`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/appraisals/${id}/hod-calibrate`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
@@ -1134,7 +1155,7 @@ export const api = {
   },
 
   async returnAppraisalToManager(id: string, data: { reason: string }): Promise<Appraisal> {
-    const res = await fetch(`${API_BASE}/appraisals/${id}/hod-return`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/appraisals/${id}/hod-return`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
@@ -1160,7 +1181,7 @@ export const api = {
       notes?: string;
     }
   ): Promise<Appraisal> {
-    const res = await fetch(`${API_BASE}/appraisals/${id}/hr-approve`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/appraisals/${id}/hr-approve`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
@@ -1189,7 +1210,7 @@ export const api = {
       notes?: string;
     }
   ): Promise<Appraisal> {
-    const res = await fetch(`${API_BASE}/appraisals/${id}/lock`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/appraisals/${id}/lock`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(data || {}),
@@ -1209,7 +1230,7 @@ export const api = {
     invalidateApiCache('/appraisals');
     invalidateApiCache('/ess');
     invalidateApiCache('/notifications');
-    const res = await fetch(`${API_BASE}/appraisals/${id}/acknowledge`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/appraisals/${id}/acknowledge`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify({ comments }),
@@ -1222,7 +1243,7 @@ export const api = {
   },
 
   async getAppraisalLetter(id: string): Promise<any> {
-    const res = await fetch(`${API_BASE}/appraisals/${id}/letter`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/appraisals/${id}/letter`, {
       headers: getAuthHeaders(),
     });
     if (!res.ok) throw new Error('Failed to generate appraisal letter');
@@ -1243,7 +1264,7 @@ export const api = {
     invalidateApiCache('/reviews');
     invalidateApiCache('/ess');
     invalidateApiCache('/notifications');
-    const res = await fetch(`${API_BASE}/reviews/${reviewId}/self-assess`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/reviews/${reviewId}/self-assess`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(cleanSnapshotPayload(data)),
@@ -1257,7 +1278,7 @@ export const api = {
 
   async getEssOverview(employeeId?: string): Promise<any> {
     const endpoint = employeeId ? `${API_BASE}/ess/overview/${employeeId}` : `${API_BASE}/ess/overview/me`;
-    const res = await fetch(endpoint, {
+    const res = await fetchWithAutoRefresh(endpoint, {
       headers: getAuthHeaders(),
     });
     if (!res.ok) {
@@ -1281,7 +1302,7 @@ export const api = {
     if (params?.cycleId) query.append('cycleId', params.cycleId);
     if (params?.year) query.append('year', String(params.year));
 
-    const res = await fetch(`${API_BASE}/appraisals/analytics/executive?${query.toString()}`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/appraisals/analytics/executive?${query.toString()}`, {
       headers: getAuthHeaders(),
     });
     if (!res.ok) {
@@ -1395,7 +1416,7 @@ export const api = {
     if (params?.departmentId) q.append('departmentId', params.departmentId);
     if (params?.cycleId) q.append('cycleId', params.cycleId);
     if (params?.status) q.append('status', params.status);
-    const res = await fetch(`${API_BASE}/reports/quarterly-status?${q.toString()}`, { headers: getAuthHeaders() });
+    const res = await fetchWithAutoRefresh(`${API_BASE}/reports/quarterly-status?${q.toString()}`, { headers: getAuthHeaders() });
     if (!res.ok) throw new Error('Failed to fetch quarterly status report');
     return res.json();
   },
@@ -1404,7 +1425,7 @@ export const api = {
     const q = new URLSearchParams();
     if (params?.departmentId) q.append('departmentId', params.departmentId);
     if (params?.cycleId) q.append('cycleId', params.cycleId);
-    const res = await fetch(`${API_BASE}/reports/pending-overdue?${q.toString()}`, { headers: getAuthHeaders() });
+    const res = await fetchWithAutoRefresh(`${API_BASE}/reports/pending-overdue?${q.toString()}`, { headers: getAuthHeaders() });
     if (!res.ok) throw new Error('Failed to fetch pending/overdue report');
     return res.json();
   },
@@ -1414,19 +1435,19 @@ export const api = {
     if (params?.departmentId) q.append('departmentId', params.departmentId);
     if (params?.cycleId) q.append('cycleId', params.cycleId);
     if (params?.search) q.append('search', params.search);
-    const res = await fetch(`${API_BASE}/reports/employee-history?${q.toString()}`, { headers: getAuthHeaders() });
+    const res = await fetchWithAutoRefresh(`${API_BASE}/reports/employee-history?${q.toString()}`, { headers: getAuthHeaders() });
     if (!res.ok) throw new Error('Failed to fetch employee history report');
     return res.json();
   },
 
   async getDepartmentPerformanceReport(): Promise<any> {
-    const res = await fetch(`${API_BASE}/reports/department-performance`, { headers: getAuthHeaders() });
+    const res = await fetchWithAutoRefresh(`${API_BASE}/reports/department-performance`, { headers: getAuthHeaders() });
     if (!res.ok) throw new Error('Failed to fetch department performance report');
     return res.json();
   },
 
   async getManagerCompletionReport(): Promise<any> {
-    const res = await fetch(`${API_BASE}/reports/manager-completion`, { headers: getAuthHeaders() });
+    const res = await fetchWithAutoRefresh(`${API_BASE}/reports/manager-completion`, { headers: getAuthHeaders() });
     if (!res.ok) throw new Error('Failed to fetch manager completion report');
     return res.json();
   },
@@ -1435,19 +1456,19 @@ export const api = {
     const q = new URLSearchParams();
     if (params?.cycleId) q.append('cycleId', params.cycleId);
     if (params?.year) q.append('year', String(params.year));
-    const res = await fetch(`${API_BASE}/reports/appraisal-due?${q.toString()}`, { headers: getAuthHeaders() });
+    const res = await fetchWithAutoRefresh(`${API_BASE}/reports/appraisal-due?${q.toString()}`, { headers: getAuthHeaders() });
     if (!res.ok) throw new Error('Failed to fetch appraisal due report');
     return res.json();
   },
 
   async getRatingTrendReport(): Promise<any> {
-    const res = await fetch(`${API_BASE}/reports/rating-trend`, { headers: getAuthHeaders() });
+    const res = await fetchWithAutoRefresh(`${API_BASE}/reports/rating-trend`, { headers: getAuthHeaders() });
     if (!res.ok) throw new Error('Failed to fetch rating trend report');
     return res.json();
   },
 
   async getKraPerformanceReport(): Promise<any> {
-    const res = await fetch(`${API_BASE}/reports/kra-performance`, { headers: getAuthHeaders() });
+    const res = await fetchWithAutoRefresh(`${API_BASE}/reports/kra-performance`, { headers: getAuthHeaders() });
     if (!res.ok) throw new Error('Failed to fetch KRA performance report');
     return res.json();
   },
@@ -1456,7 +1477,7 @@ export const api = {
     const q = new URLSearchParams();
     if (params?.module) q.append('module', params.module);
     if (params?.limit) q.append('limit', String(params.limit));
-    const res = await fetch(`${API_BASE}/reports/audit-trail?${q.toString()}`, { headers: getAuthHeaders() });
+    const res = await fetchWithAutoRefresh(`${API_BASE}/reports/audit-trail?${q.toString()}`, { headers: getAuthHeaders() });
     if (!res.ok) throw new Error('Failed to fetch audit trail report');
     return res.json();
   },
@@ -1465,13 +1486,13 @@ export const api = {
   // Bulk Excel/CSV Import & Export Engine (Phase 7)
   // ==========================================
   async getBulkTemplate(datasetType: string): Promise<{ datasetType: string; columns: any[]; sampleData: any[] }> {
-    const res = await fetch(`${API_BASE}/bulk/templates/${datasetType}`, { headers: getAuthHeaders() });
+    const res = await fetchWithAutoRefresh(`${API_BASE}/bulk/templates/${datasetType}`, { headers: getAuthHeaders() });
     if (!res.ok) throw new Error('Failed to fetch bulk template schema');
     return res.json();
   },
 
   async validateBulkRows(datasetType: string, rows: any[], allowUpdateExisting = true): Promise<any> {
-    const res = await fetch(`${API_BASE}/bulk/validate/${datasetType}`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/bulk/validate/${datasetType}`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({ rows, allowUpdateExisting }),
@@ -1488,7 +1509,7 @@ export const api = {
     rows: any[],
     options?: { skipInvalid?: boolean; allowUpdateExisting?: boolean; fileName?: string }
   ): Promise<any> {
-    const res = await fetch(`${API_BASE}/bulk/import/${datasetType}`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/bulk/import/${datasetType}`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({
@@ -1519,13 +1540,13 @@ export const api = {
     const q = new URLSearchParams();
     if (filters?.cycleId) q.append('cycleId', filters.cycleId);
     if (filters?.departmentId) q.append('departmentId', filters.departmentId);
-    const res = await fetch(`${API_BASE}/bulk/export/${datasetType}?${q.toString()}`, { headers: getAuthHeaders() });
+    const res = await fetchWithAutoRefresh(`${API_BASE}/bulk/export/${datasetType}?${q.toString()}`, { headers: getAuthHeaders() });
     if (!res.ok) throw new Error('Failed to generate export dataset');
     return res.json();
   },
 
   async getBulkImportHistory(): Promise<any[]> {
-    const res = await fetch(`${API_BASE}/bulk/history`, { headers: getAuthHeaders() });
+    const res = await fetchWithAutoRefresh(`${API_BASE}/bulk/history`, { headers: getAuthHeaders() });
     if (!res.ok) throw new Error('Failed to fetch bulk import audit history');
     return res.json();
   },
@@ -1557,31 +1578,31 @@ export const api = {
     if (params?.endDate) q.append('endDate', params.endDate);
     if (params?.isFlaggedOnly) q.append('isFlaggedOnly', 'true');
 
-    const res = await fetch(`${API_BASE}/audit/logs?${q.toString()}`, { headers: getAuthHeaders() });
+    const res = await fetchWithAutoRefresh(`${API_BASE}/audit/logs?${q.toString()}`, { headers: getAuthHeaders() });
     if (!res.ok) throw new Error('Failed to fetch audit logs');
     return res.json();
   },
 
   async getAuditSummary(): Promise<{ success: boolean; metrics: any }> {
-    const res = await fetch(`${API_BASE}/audit/summary`, { headers: getAuthHeaders() });
+    const res = await fetchWithAutoRefresh(`${API_BASE}/audit/summary`, { headers: getAuthHeaders() });
     if (!res.ok) throw new Error('Failed to fetch audit summary metrics');
     return res.json();
   },
 
   async getEmployeeAuditTimeline(employeeId: string): Promise<{ success: boolean; employee: any; timeline: any[] }> {
-    const res = await fetch(`${API_BASE}/audit/timeline/${employeeId}`, { headers: getAuthHeaders() });
+    const res = await fetchWithAutoRefresh(`${API_BASE}/audit/timeline/${employeeId}`, { headers: getAuthHeaders() });
     if (!res.ok) throw new Error('Failed to fetch employee audit timeline');
     return res.json();
   },
 
   async getComplianceHealthReport(): Promise<{ success: boolean; report: any }> {
-    const res = await fetch(`${API_BASE}/audit/compliance-health`, { headers: getAuthHeaders() });
+    const res = await fetchWithAutoRefresh(`${API_BASE}/audit/compliance-health`, { headers: getAuthHeaders() });
     if (!res.ok) throw new Error('Failed to fetch compliance health report');
     return res.json();
   },
 
   async resolveComplianceFlag(flagId: string, resolutionNote: string): Promise<{ success: boolean; flag: any }> {
-    const res = await fetch(`${API_BASE}/audit/flags/${flagId}/resolve`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/audit/flags/${flagId}/resolve`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({ resolutionNote }),
@@ -1594,7 +1615,7 @@ export const api = {
   },
 
   async recordAuditEvent(data: Record<string, any>): Promise<any> {
-    const res = await fetch(`${API_BASE}/audit/log`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/audit/log`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
@@ -1607,7 +1628,7 @@ export const api = {
     const q = new URLSearchParams();
     if (params?.module) q.append('module', params.module);
     if (params?.format) q.append('format', params.format);
-    const res = await fetch(`${API_BASE}/audit/export?${q.toString()}`, { headers: getAuthHeaders() });
+    const res = await fetchWithAutoRefresh(`${API_BASE}/audit/export?${q.toString()}`, { headers: getAuthHeaders() });
     if (!res.ok) throw new Error('Failed to export audit report');
     return res.json();
   },
@@ -1618,13 +1639,13 @@ export const api = {
 
   // 9-Box Talent Matrix
   async getTalentRecords(): Promise<TalentRecord[]> {
-    const res = await fetch(`${API_BASE}/talent-records`, { headers: getAuthHeaders() });
+    const res = await fetchWithAutoRefresh(`${API_BASE}/talent-records`, { headers: getAuthHeaders() });
     if (!res.ok) throw new Error('Failed to fetch 9-box talent records');
     return res.json();
   },
 
   async updateTalentRecord(id: string, data: Partial<TalentRecord>): Promise<TalentRecord> {
-    const res = await fetch(`${API_BASE}/talent-records/${id}`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/talent-records/${id}`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
@@ -1638,7 +1659,7 @@ export const api = {
 
   // Gemini AI Operations
   async generateAiReviewSynthesis(payload: AiReviewSynthesisRequest): Promise<{ success: boolean; data: AiReviewSynthesisResult; engine: string }> {
-    const res = await fetch(`${API_BASE}/gemini/generate-review-narrative`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/gemini/generate-review-narrative`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(payload),
@@ -1648,7 +1669,7 @@ export const api = {
       let errMessage = 'Failed to synthesize review';
       try {
         const errJson = JSON.parse(text);
-        if (errJson.error) errMessage = errJson.error;
+        if (errJson.message || errJson.error) errMessage = errJson.message || errJson.error;
       } catch {
         if (text.includes('<!doctype') || text.includes('<html')) {
           errMessage = 'Server error or gateway timeout. Please check backend status.';
@@ -1670,7 +1691,7 @@ export const api = {
 
 
   async generateAiTalentInsights(payload: AiTalentInsightsRequest): Promise<{ success: boolean; data: AiTalentInsightsResult; engine: string }> {
-    const res = await fetch(`${API_BASE}/gemini/talent-insights-summary`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/gemini/talent-insights-summary`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(payload),
@@ -1680,7 +1701,7 @@ export const api = {
       let errMessage = 'Failed to generate talent insights';
       try {
         const errJson = JSON.parse(text);
-        if (errJson.error) errMessage = errJson.error;
+        if (errJson.message || errJson.error) errMessage = errJson.message || errJson.error;
       } catch {
         if (text.includes('<!doctype') || text.includes('<html')) {
           errMessage = 'Server error or gateway timeout. Please check backend status.';
@@ -1858,7 +1879,7 @@ export const api = {
     publish?: boolean;
   }): Promise<PerformanceImprovementPlan> {
     invalidateApiCache('/pips');
-    const res = await fetch(`${API_BASE}/pips`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/pips`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
@@ -1878,7 +1899,7 @@ export const api = {
     goals: Array<{ id?: string; description: string; targetMetric?: string; dueDate?: string; status?: string }>;
   }>): Promise<PerformanceImprovementPlan> {
     invalidateApiCache('/pips');
-    const res = await fetch(`${API_BASE}/pips/${id}`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/pips/${id}`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
@@ -1893,7 +1914,7 @@ export const api = {
   async publishPip(id: string): Promise<PerformanceImprovementPlan> {
     invalidateApiCache('/pips');
     invalidateApiCache('/notifications');
-    const res = await fetch(`${API_BASE}/pips/${id}/publish`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/pips/${id}/publish`, {
       method: 'POST',
       headers: getAuthHeaders(),
     });
@@ -1911,7 +1932,7 @@ export const api = {
   ): Promise<PerformanceImprovementPlan> {
     invalidateApiCache('/pips');
     invalidateApiCache('/notifications');
-    const res = await fetch(`${API_BASE}/pips/${id}/checkins`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/pips/${id}/checkins`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({ notes, goalRatings }),
@@ -1926,7 +1947,7 @@ export const api = {
   async acknowledgePip(id: string, comments?: string): Promise<PerformanceImprovementPlan> {
     invalidateApiCache('/pips');
     invalidateApiCache('/notifications');
-    const res = await fetch(`${API_BASE}/pips/${id}/acknowledge`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/pips/${id}/acknowledge`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({ comments }),
@@ -1942,7 +1963,7 @@ export const api = {
     invalidateApiCache('/pips');
     invalidateApiCache('/notifications');
     invalidateApiCache('/appraisals');
-    const res = await fetch(`${API_BASE}/pips/${id}/outcome`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/pips/${id}/outcome`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
@@ -1957,7 +1978,7 @@ export const api = {
   async cancelPip(id: string, reason: string): Promise<PerformanceImprovementPlan> {
     invalidateApiCache('/pips');
     invalidateApiCache('/appraisals');
-    const res = await fetch(`${API_BASE}/pips/${id}/cancel`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/pips/${id}/cancel`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({ reason }),
@@ -1974,7 +1995,7 @@ export const api = {
     data: { action: string; notes?: string }
   ): Promise<PerformanceImprovementPlan> {
     invalidateApiCache('/pips');
-    const res = await fetch(`${API_BASE}/pips/${id}/resolve-failure`, {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/pips/${id}/resolve-failure`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),

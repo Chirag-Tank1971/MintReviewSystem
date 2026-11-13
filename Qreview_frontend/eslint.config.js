@@ -24,6 +24,12 @@ export default tseslint.config(
       // tightening this repo-wide is a larger follow-up, not part of this pass.
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      // All API traffic must go through services/api.ts → fetchWithAutoRefresh, so an expired
+      // access token is renewed instead of failing the request.
+      'no-restricted-globals': [
+        'error',
+        { name: 'fetch', message: 'Use fetchWithAutoRefresh (services/api.ts) so expired sessions are renewed.' },
+      ],
     },
   }
 );

@@ -157,9 +157,9 @@ export const AppraisalLetterModal: React.FC<AppraisalLetterModalProps> = ({ appr
   const oldBreakdown = calculateSalaryBreakdown(currentCtc);
   const newBreakdown = calculateSalaryBreakdown(revisedCtc);
 
-  const refNum = letterData?.referenceNumber || `HR/APP/${appraisal.appraisalYear || '2026'}/${appraisal.employeeCode}`;
+  const refNum = letterData?.referenceNumber || `HR/APP/${appraisal.appraisalYear || new Date().getFullYear()}/${appraisal.employeeCode}`;
   const letterDate = letterData?.date || new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-  const effDate = appraisal.effectiveDate || `${appraisal.appraisalYear || '2026'}-10-01`;
+  const effDate = appraisal.effectiveDate || `${appraisal.appraisalYear || new Date().getFullYear()}-10-01`;
 
   return createPortal(
     <div
@@ -286,13 +286,13 @@ export const AppraisalLetterModal: React.FC<AppraisalLetterModalProps> = ({ appr
               </div>
               <div>
                 <span className="text-[11px] text-slate-500">Appraisal Cohort:</span>{' '}
-                <strong className="text-indigo-700">{appraisal.cycleName} ({appraisal.appraisalYear || '2026'})</strong>
+                <strong className="text-indigo-700">{appraisal.cycleName} ({appraisal.appraisalYear || new Date().getFullYear()})</strong>
               </div>
             </div>
 
             {/* Subject Line */}
             <div className="font-bold text-slate-900 text-xs py-1 border-b border-dashed border-slate-200">
-              SUBJECT: ANNUAL PERFORMANCE APPRAISAL & COMPENSATION REVISION — FISCAL YEAR {appraisal.appraisalYear || '2026'}
+              SUBJECT: ANNUAL PERFORMANCE APPRAISAL & COMPENSATION REVISION — FISCAL YEAR {appraisal.appraisalYear || new Date().getFullYear()}
             </div>
 
             {/* Letter Greeting & Paragraphs */}
@@ -303,7 +303,7 @@ export const AppraisalLetterModal: React.FC<AppraisalLetterModalProps> = ({ appr
 
               <p>
                 We take immense pleasure in sharing the results of your Annual Performance Appraisal for cycle year{' '}
-                <strong>{appraisal.appraisalYear || '2026'}</strong> under the <strong>{appraisal.cycleName}</strong> cohort. Following the consolidation and thorough multi-stage calibration of your four quarterly performance reviews, your composite annual evaluation has been ratified as{' '}
+                <strong>{appraisal.appraisalYear || new Date().getFullYear()}</strong> under the <strong>{appraisal.cycleName}</strong> cohort. Following the consolidation and thorough multi-stage calibration of your four quarterly performance reviews, your composite annual evaluation has been ratified as{' '}
                 <span className="font-bold text-indigo-800 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 tabular-nums">
                   {(appraisal.finalRating || appraisal.recommendedRating || 'MEETS_EXPECTATIONS').replace(/_/g, ' ')}
                 </span>{' '}

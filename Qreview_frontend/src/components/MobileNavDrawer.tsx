@@ -56,7 +56,7 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({
     onClose,
   });
 
-  const { user, logout, switchRole, isLoading } = useAuth();
+  const { user, logout, switchRole, canSwitchPersona, isLoading } = useAuth();
   const { isDark, toggleTheme } = useTheme();
 
   React.useEffect(() => {
@@ -191,8 +191,8 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({
             </div>
           )}
 
-          {/* Demo role switcher (development / demo builds only) */}
-          {import.meta.env.VITE_ENABLE_DEMO_PERSONAS === 'true' && (
+          {/* Demo role switcher: same rule as the header (demo flag + Super Admin or an active impersonation) */}
+          {canSwitchPersona && (
             <div className="pt-3 border-t border-slate-200 dark:border-slate-800">
               <div className="px-2.5 pb-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">Switch role (demo)</div>
               <div className="grid grid-cols-2 gap-1.5">

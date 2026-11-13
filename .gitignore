@@ -88,6 +88,15 @@ temp/
 # =========================
 # Testing
 # =========================
+# Test suites are kept local only (not committed)
+test/
+tests/
+__tests__/
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+vitest.config.*
 .nyc_output/
 playwright-report/
 test-results/
@@ -96,6 +105,9 @@ test-results/
 # TypeScript
 # =========================
 *.tsbuildinfo
+
+# Local one-off maintenance scripts (e.g. account backfill)
+Qreview_backend/scripts/
 
 # =========================
 # Generated files
@@ -117,6 +129,17 @@ storage/
 *.crt
 *.p12
 *.pfx
+
+*credentials*.txt
+
+# =========================
+# Real employee data (never commit)
+# =========================
+excel data/
+MINT_KRA_Only/
+*.xlsx
+*.xls
+*.csv
 
 # =========================
 # Backup files

@@ -13,6 +13,8 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   switchRole: (role?: UserRole, userId?: string) => Promise<void>;
+  /** Staging persona switcher is available: flag on, and an admin or admin-started persona session. */
+  canSwitchPersona: boolean;
   refreshSession: () => Promise<void>;
   changePassword: (newPassword: string, confirmPassword: string) => Promise<void>;
 }
@@ -20,15 +22,22 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 /** Decode JWT expiry without any extra library — pure base64 */
-function getTokenExpiry(token: string): number | null {
+function decodeTokenPayload(token: string): Record<string, any> | null {
   try {
     const payload = token.split('.')[1];
-    const decoded = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
-    return decoded.exp ? decoded.exp * 1000 : null; // convert to ms
+    return JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
   } catch {
     return null;
   }
 }
+
+function getTokenExpiry(token: string): number | null {
+  const decoded = decodeTokenPayload(token);
+  return decoded?.exp ? decoded.exp * 1000 : null; // convert to ms
+}
+
+/** UI hint only; the server re-checks every persona switch. */
+const DEMO_PERSONAS_ENABLED = import.meta.env.VITE_ENABLE_DEMO_PERSONAS === 'true';
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -212,6 +221,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         login,
         logout,
         switchRole,
+        canSwitchPersona:
+          DEMO_PERSONAS_ENABLED &&
+          !!user &&
+          (user.role === 'SUPER_ADMIN' || !!(token && decodeTokenPayload(token)?.impersonatorId)),
         refreshSession: loadSession,
         changePassword,
       }}

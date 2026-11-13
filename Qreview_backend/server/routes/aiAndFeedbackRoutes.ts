@@ -1,7 +1,10 @@
-import { Router } from 'express';
+import { Router, Response } from 'express';
 import { GoogleGenAI, Type } from '@google/genai';
+import { z } from 'zod';
 import { getDbCollection } from '../db.js';
-import { authenticateToken, requireRoles, AuthenticatedRequest } from '../auth.js';
+import { getConfig } from '../config.js';
+import { authenticateToken, requireRoles, recordAuditLog, AuthenticatedRequest } from '../auth.js';
+import { validateBody, TalentRecordUpdateSchema } from '../validation.js';
 import {
   TalentRecord,
   AiReviewSynthesisRequest,
@@ -17,105 +20,130 @@ aiAndFeedbackRouter.use(
   requireRoles('SUPER_ADMIN', 'HR', 'HOD', 'MANAGER', 'REPORTING_MANAGER', 'EMPLOYEE')
 );
 
-// Initialize Gemini Client (lazy helper to ensure process.env is read)
+/**
+ * Sent when no AI provider is configured or every configured model failed.
+ * We never substitute canned text: a fabricated performance narrative is worse than none.
+ */
+const AI_UNAVAILABLE = {
+  error: 'AI_UNAVAILABLE',
+  message: 'The AI assistant is unavailable right now. Please try again later or write the summary manually.',
+};
+
 function getGeminiClient(): GoogleGenAI | null {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
-  return new GoogleGenAI({
-    apiKey,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      },
-    },
-  });
+  const apiKey = getConfig().GEMINI_API_KEY;
+  return apiKey ? new GoogleGenAI({ apiKey }) : null;
 }
 
-// Resilient helper with retry and model fallback for 503 / high demand spikes
-async function safeGenerateContent(ai: GoogleGenAI, config: {
-  contents: string;
-  responseSchema?: any;
-}): Promise<{ text: string; modelUsed: string } | null> {
-  const modelsToTry = ['gemini-3.8-flash', 'gemini-flash-latest'];
-  
-  for (const modelName of modelsToTry) {
+/** Tries each configured model, retrying once on transient (429/503) errors. */
+async function safeGenerateContent(
+  ai: GoogleGenAI,
+  config: { contents: string; responseSchema?: any }
+): Promise<{ text: string; modelUsed: string } | null> {
+  for (const modelName of getConfig().GEMINI_MODELS) {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const response = await ai.models.generateContent({
           model: modelName,
           contents: config.contents,
-          config: {
-            responseMimeType: 'application/json',
-            responseSchema: config.responseSchema,
-          },
+          config: { responseMimeType: 'application/json', responseSchema: config.responseSchema },
         });
-        if (response && response.text) {
-          console.log(`[Gemini AI] Content generated using model: "${modelName}"`);
-          return { text: response.text, modelUsed: modelName };
-        }
+        if (response?.text) return { text: response.text, modelUsed: modelName };
+        break;
       } catch (err: any) {
-        // If 503 UNAVAILABLE or 429 high demand, wait briefly before retrying
-        const isTransient = err?.message?.includes('503') || err?.message?.includes('429') || err?.message?.includes('demand');
+        const msg = String(err?.message || '');
+        const isTransient = msg.includes('503') || msg.includes('429') || msg.includes('demand');
         if (isTransient && attempt === 0) {
           await new Promise((resolve) => setTimeout(resolve, 800));
           continue;
         }
-        // Break to try next fallback model
+        console.error(`[Gemini AI] Model "${modelName}" failed:`, msg);
         break;
       }
     }
   }
-  console.warn('[Gemini AI] Gemini models unavailable or rate-limited; falling back to rule-based engine');
   return null;
 }
 
-// -------------------------------------------------------------
-// AI ENDPOINT 1: Performance Review Narrative & Appraisal Synthesizer
-// -------------------------------------------------------------
-aiAndFeedbackRouter.post('/gemini/generate-review-narrative', async (req, res) => {
+async function generateJson<T>(prompt: string, responseSchema: any): Promise<{ data: T; engine: string } | null> {
+  const ai = getGeminiClient();
+  if (!ai) return null;
+  const result = await safeGenerateContent(ai, { contents: prompt, responseSchema });
+  if (!result) return null;
   try {
-    const payload: AiReviewSynthesisRequest = req.body;
-    console.log(`[Gemini AI] Generating review narrative for: "${payload.employeeName}" (${payload.department})`);
-    const ai = getGeminiClient();
+    return { data: JSON.parse(result.text) as T, engine: result.modelUsed };
+  } catch {
+    console.error('[Gemini AI] Model returned non-JSON output');
+    return null;
+  }
+}
 
-    const prompt = `You are an elite Chief People Officer and HR appraisal consultant. Synthesize a comprehensive, executive-level performance review assessment for:
+// -------------------------------------------------------------
+// Request schemas: the AI only ever sees data the caller actually has
+// -------------------------------------------------------------
+const score = z.number().min(0).max(5);
+const ReviewSynthesisSchema = z.object({
+  employeeName: z.string().trim().min(1).max(150),
+  designation: z.string().trim().max(150).optional().default(''),
+  department: z.string().trim().max(150).optional().default(''),
+  quarterlyScores: z
+    .array(z.object({ quarter: z.string().trim().min(1).max(60), score, reviewNotes: z.string().max(4000).optional() }))
+    .min(1, 'At least one scored review is required'),
+  annualScore: score,
+  kraSummary: z
+    .array(z.object({ title: z.string().trim().min(1).max(300), weightage: z.number().min(0).max(100), target: z.string().max(1000).optional().default('') }))
+    .max(50),
+  perspective: z.enum(['manager', 'self', 'executive']),
+});
+
+const count = z.number().int().min(0);
+const TalentInsightsSchema = z.object({
+  department: z.string().trim().max(150).optional(),
+  cycleName: z.string().trim().max(150).optional(),
+  talentPoolSummary: z.object({
+    totalEmployees: count,
+    highPerformersCount: count,
+    coreCount: count,
+    underperformersCount: count,
+    highRiskAttritionCount: count,
+  }),
+});
+
+// -------------------------------------------------------------
+// AI ENDPOINT 1: Performance Review Narrative
+// -------------------------------------------------------------
+aiAndFeedbackRouter.post(
+  '/gemini/generate-review-narrative',
+  validateBody(ReviewSynthesisSchema),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const payload = req.body as AiReviewSynthesisRequest;
+
+      const prompt = `You are an experienced HR appraisal consultant. Write a balanced, evidence-based performance review assessment.
+Use ONLY the facts below. Do not invent achievements, metrics, projects, peer feedback or names that are not stated.
+Where the evidence is thin, say so plainly.
+
 Employee: ${payload.employeeName}
-Designation: ${payload.designation}
-Department: ${payload.department}
-Annual Performance Rollup Score: ${payload.annualScore} / 5.00
-Quarterly Scores Breakdown:
-${payload.quarterlyScores.map((q) => `- ${q.quarter}: Score ${q.score}/5.00 | Notes: "${q.reviewNotes || 'Solid milestone execution'}"`).join('\n')}
+Designation: ${payload.designation || 'Not specified'}
+Department: ${payload.department || 'Not specified'}
+Overall score: ${payload.annualScore} / 5.00
+Scored reviews:
+${payload.quarterlyScores.map((q) => `- ${q.quarter}: ${q.score}/5.00${q.reviewNotes ? ` | Notes: "${q.reviewNotes}"` : ''}`).join('\n')}
 
-Core KRAs & Weights:
-${payload.kraSummary.map((k) => `- ${k.title} (${k.weightage}% weight): Target "${k.target}"`).join('\n')}
+KRAs and weights:
+${payload.kraSummary.length ? payload.kraSummary.map((k) => `- ${k.title} (${k.weightage}%)${k.target ? `: target "${k.target}"` : ''}`).join('\n') : '- None recorded'}
 
-Perspective: ${payload.perspective.toUpperCase()}
+Perspective: ${payload.perspective.toUpperCase()}`;
 
-Generate a structured JSON response matching the required schema with balanced, metric-driven, and empowering language.`;
-
-    if (ai) {
       const responseSchema = {
         type: Type.OBJECT,
         properties: {
           executiveSummary: { type: Type.STRING },
-          topStrengths: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-          },
-          growthAreas: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-          },
+          topStrengths: { type: Type.ARRAY, items: { type: Type.STRING } },
+          growthAreas: { type: Type.ARRAY, items: { type: Type.STRING } },
           suggestedManagerNarrative: { type: Type.STRING },
           suggestedSelfAppraisalDraft: { type: Type.STRING },
-          keyAchievements: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-          },
-          recommendedDevelopmentGoals: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-          },
+          keyAchievements: { type: Type.ARRAY, items: { type: Type.STRING } },
+          recommendedDevelopmentGoals: { type: Type.ARRAY, items: { type: Type.STRING } },
         },
         required: [
           'executiveSummary',
@@ -128,93 +156,48 @@ Generate a structured JSON response matching the required schema with balanced, 
         ],
       };
 
-      const result = await safeGenerateContent(ai, { contents: prompt, responseSchema });
-      if (result && result.text) {
-        try {
-          const parsed: AiReviewSynthesisResult = JSON.parse(result.text);
-          return res.json({ success: true, data: parsed, engine: result.modelUsed });
-        } catch {
-          // fallback
-        }
-      }
+      const result = await generateJson<AiReviewSynthesisResult>(prompt, responseSchema);
+      if (!result) return res.status(503).json(AI_UNAVAILABLE);
+      return res.json({ success: true, data: result.data, engine: result.engine });
+    } catch (err: any) {
+      console.error('[Gemini AI] Review narrative failed:', err);
+      res.status(500).json({ error: 'Failed to synthesize review' });
     }
-
-    // Fallback structured generation
-    const fallbackResult: AiReviewSynthesisResult = {
-      executiveSummary: `${payload.employeeName} demonstrated high operational excellence and consistent milestone delivery across Q1–Q4, maintaining an overall score of ${payload.annualScore}/5.00 with strong alignment to departmental strategic KRAs.`,
-      topStrengths: [
-        `Consistently exceeded quality standards on ${payload.kraSummary[0]?.title || 'core deliverable goals'}.`,
-        'Proactive cross-functional collaboration and clear milestone communication.',
-        'High ownership in troubleshooting complex edge cases during release cycles.',
-      ],
-      growthAreas: [
-        'Scale mentorship by leading bi-weekly technical or functional knowledge-sharing workshops.',
-        'Enhance long-range predictive resource forecasting for Q3/Q4 initiatives.',
-      ],
-      suggestedManagerNarrative: `Over the past 4 quarters, ${payload.employeeName} has proven to be an invaluable asset to ${payload.department}. Their dedication to quality on weighted KRAs resulted in an exceptional ${payload.annualScore} rating. I recommend continued leadership exposure and expanded project scope for the upcoming cycle.`,
-      suggestedSelfAppraisalDraft: `Throughout this cycle, I focused heavily on executing high-impact deliverables aligned with our core KRAs. In addition to meeting targets, I collaborated closely with peers to maintain release stability and address bottlenecks early. I look forward to taking on broader strategic responsibilities in the next cycle.`,
-      keyAchievements: [
-        `Achieved ${payload.annualScore >= 4.0 ? 'Top Tier' : 'Core'} performance ranking across all 4 quarters.`,
-        `Successfully met all ${payload.kraSummary.length} designated KRAs with zero critical compliance slips.`,
-        'Received peer recognitions for velocity and proactive problem solving.',
-      ],
-      recommendedDevelopmentGoals: [
-        'Complete Advanced Architecture & Systems Design certification.',
-        'Lead one cross-departmental innovation or automation sprint.',
-      ],
-    };
-
-    return res.json({ success: true, data: fallbackResult, engine: 'rule-synthesizer' });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message || 'Failed to synthesize review' });
   }
-});
+);
 
 // -------------------------------------------------------------
-// AI ENDPOINT 2: Executive Talent Matrix & Retention Intelligence
+// AI ENDPOINT 2: Talent Matrix Insights
 // -------------------------------------------------------------
-aiAndFeedbackRouter.post('/gemini/talent-insights-summary', async (req, res) => {
-  try {
-    const payload: AiTalentInsightsRequest = req.body;
-    console.log(`[Gemini AI] Synthesizing talent matrix insights for: "${payload.department || 'Enterprise-Wide'}"`);
-    const ai = getGeminiClient();
+aiAndFeedbackRouter.post(
+  '/gemini/talent-insights-summary',
+  validateBody(TalentInsightsSchema),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const payload = req.body as AiTalentInsightsRequest;
+      const s = payload.talentPoolSummary;
 
-    const prompt = `You are an Executive Board Talent Advisor. Generate strategic talent intelligence and risk mitigation recommendations:
-Department: ${payload.department || 'Enterprise-Wide'}
-Total Cohort: ${payload.talentPoolSummary.totalEmployees} Employees
-High Performers: ${payload.talentPoolSummary.highPerformersCount}
-Core Performers: ${payload.talentPoolSummary.coreCount}
-Underperforming / High Needs: ${payload.talentPoolSummary.underperformersCount}
-Flight Risk / Retention Concerns: ${payload.talentPoolSummary.highRiskAttritionCount}
+      const prompt = `You are a talent advisor. Using ONLY the aggregate counts below, give strategic observations and recommendations.
+Do not name individuals and do not invent figures that are not given.
 
-Provide:
-1. Department Health Score (0 - 100)
-2. Strategic Observations (3-4 bullets)
-3. Retention Recommendations (2-3 items)
-4. Leadership Succession Pipeline insights (2 items)
-5. Immediate Risk Mitigations (2 items)`;
+Scope: ${payload.department || 'Whole organization'}
+Total assessed: ${s.totalEmployees}
+High performers: ${s.highPerformersCount}
+Core performers: ${s.coreCount}
+Underperforming: ${s.underperformersCount}
+Medium/high flight risk: ${s.highRiskAttritionCount}
 
-    if (ai) {
+Provide a health score (0-100) with its basis reflected in the observations, 3-4 strategic observations,
+2-3 retention recommendations, 2 succession-pipeline considerations, and 2 immediate risk mitigations.`;
+
       const responseSchema = {
         type: Type.OBJECT,
         properties: {
           departmentHealthScore: { type: Type.NUMBER },
-          strategicObservations: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-          },
-          retentionRecommendations: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-          },
-          leadershipSuccessionPipelines: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-          },
-          immediateRiskMitigations: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-          },
+          strategicObservations: { type: Type.ARRAY, items: { type: Type.STRING } },
+          retentionRecommendations: { type: Type.ARRAY, items: { type: Type.STRING } },
+          leadershipSuccessionPipelines: { type: Type.ARRAY, items: { type: Type.STRING } },
+          immediateRiskMitigations: { type: Type.ARRAY, items: { type: Type.STRING } },
         },
         required: [
           'departmentHealthScore',
@@ -225,82 +208,69 @@ Provide:
         ],
       };
 
-      const result = await safeGenerateContent(ai, { contents: prompt, responseSchema });
-      if (result && result.text) {
-        try {
-          const parsed: AiTalentInsightsResult = JSON.parse(result.text);
-          return res.json({ success: true, data: parsed, engine: result.modelUsed });
-        } catch {
-          // fallback
-        }
-      }
+      const result = await generateJson<AiTalentInsightsResult>(prompt, responseSchema);
+      if (!result) return res.status(503).json(AI_UNAVAILABLE);
+      return res.json({ success: true, data: result.data, engine: result.engine });
+    } catch (err: any) {
+      console.error('[Gemini AI] Talent insights failed:', err);
+      res.status(500).json({ error: 'Failed to generate talent insights' });
     }
-
-    const fallbackResult: AiTalentInsightsResult = {
-      departmentHealthScore: 88,
-      strategicObservations: [
-        `Strong top-tier concentration with ${payload.talentPoolSummary.highPerformersCount} high performers driving core business velocity.`,
-        `Solid core benchmark of ${payload.talentPoolSummary.coreCount} contributors providing operational stability across quarterly cycles.`,
-        `${payload.talentPoolSummary.underperformersCount} employees currently identified for targeted skill coaching.`,
-      ],
-      retentionRecommendations: [
-        'Accelerate merit increment distribution for high-impact architects to match market 85th percentile.',
-        'Grant high-potential leaders autonomy over greenfield research initiatives and executive visibility.',
-      ],
-      leadershipSuccessionPipelines: [
-        'Rohan Deshmukh & Kavita Menon identified as primary succession candidates for upcoming Director-level openings.',
-        'Establish structured executive shadowing sessions ahead of next fiscal cycle.',
-      ],
-      immediateRiskMitigations: [
-        'Conduct 1-on-1 retention stay interviews with key flight-risk contributors.',
-        'Conduct regular developmental check-ins to ensure structured progression and coachability.',
-      ],
-    };
-
-    return res.json({ success: true, data: fallbackResult, engine: 'rule-synthesizer' });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message || 'Failed to generate talent insights' });
   }
-});
+);
 
 // -------------------------------------------------------------
 // 9-BOX TALENT MATRIX ENDPOINTS
 // -------------------------------------------------------------
 
-// GET all talent records
-aiAndFeedbackRouter.get('/talent-records', async (req: AuthenticatedRequest, res) => {
+// GET all talent records (employees only see their own)
+aiAndFeedbackRouter.get('/talent-records', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const talentCol = getDbCollection('talentRecords');
     let records: TalentRecord[] = await (await talentCol.find({})).toArray();
-    // If EMPLOYEE role, restrict to their own talent record
     if (req.userRole === 'EMPLOYEE' && req.user?.employeeId) {
       records = records.filter((r) => r.employeeId === req.user?.employeeId);
     }
     res.json(records);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[TalentRecords] List failed:', err);
+    res.status(500).json({ error: 'Failed to load talent records.' });
   }
 });
 
-// PUT update talent record (e.g. potential, risk, actions)
-aiAndFeedbackRouter.put('/talent-records/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const talentCol = getDbCollection('talentRecords');
-    const target = await talentCol.findOne({ id });
-    if (!target) {
-      return res.status(404).json({ error: 'Talent record not found' });
+// PUT update a talent assessment: HR / Super Admin only, whitelisted fields only
+aiAndFeedbackRouter.put(
+  '/talent-records/:id',
+  requireRoles('SUPER_ADMIN', 'HR'),
+  validateBody(TalentRecordUpdateSchema),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const talentCol = getDbCollection('talentRecords');
+      const target: TalentRecord | null = await talentCol.findOne({ id });
+      if (!target) {
+        return res.status(404).json({ error: 'Talent record not found' });
+      }
+
+      const now = new Date().toISOString();
+      const changes = { ...req.body, lastAssessedDate: now.split('T')[0], updatedAt: now };
+      await talentCol.updateOne({ id }, { $set: changes });
+
+      await recordAuditLog(
+        req.user!.id,
+        req.user!.name,
+        req.user!.role,
+        'TALENT',
+        'TALENT_RECORD_UPDATED',
+        id,
+        JSON.stringify(Object.fromEntries(Object.keys(req.body).map((k) => [k, (target as any)[k]]))),
+        JSON.stringify(req.body),
+        `Talent assessment updated for ${target.employeeName || target.employeeId}`
+      );
+
+      res.json({ ...target, ...changes });
+    } catch (err: any) {
+      console.error('[TalentRecords] Update failed:', err);
+      res.status(500).json({ error: 'Failed to update talent record.' });
     }
-
-    const updated = {
-      ...target,
-      ...req.body,
-      lastAssessedDate: new Date().toISOString().split('T')[0],
-    };
-
-    await talentCol.updateOne({ id }, { $set: updated });
-    res.json(updated);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
   }
-});
+);

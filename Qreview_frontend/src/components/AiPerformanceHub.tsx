@@ -37,6 +37,8 @@ export const AiPerformanceHub: React.FC<AiPerformanceHubProps> = ({ currentUser 
   // 1. AI Review Synthesizer State
   const [synthesizing, setSynthesizing] = useState<boolean>(false);
   const [synthesisResult, setSynthesisResult] = useState<AiReviewSynthesisResult | null>(null);
+  /** Shown instead of a result when there's no data to summarise or the AI is unavailable. */
+  const [aiError, setAiError] = useState<string | null>(null);
   const [synthesisPerspective, setSynthesisPerspective] = useState<'manager' | 'self' | 'executive'>('manager');
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
 
@@ -69,17 +71,8 @@ export const AiPerformanceHub: React.FC<AiPerformanceHubProps> = ({ currentUser 
 
       let accessibleEmployees = empData || [];
       if (isNormalEmployee) {
-        // If current user is a normal employee, match by employeeId or email/name
-        const myEmp = accessibleEmployees.find(
-          (e) => e.id === currentUser.employeeId || e.email?.toLowerCase() === currentUser.email?.toLowerCase() || e.name?.toLowerCase() === currentUser.name?.toLowerCase()
-        );
-        if (myEmp) {
-          accessibleEmployees = [myEmp];
-          setSelectedEmployeeId(myEmp.id);
-        } else if (accessibleEmployees.length > 0) {
-          accessibleEmployees = [accessibleEmployees[0]];
-          setSelectedEmployeeId(accessibleEmployees[0].id);
-        }
+        // An employee only ever sees their own record; never fall back to someone else's.
+        accessibleEmployees = accessibleEmployees.filter((e) => e.id === currentUser.employeeId);
       }
 
       setEmployees(accessibleEmployees);
@@ -105,24 +98,37 @@ export const AiPerformanceHub: React.FC<AiPerformanceHubProps> = ({ currentUser 
     if (!selectedEmployee) return;
     setSynthesizing(true);
     setSynthesisResult(null);
+    setAiError(null);
 
     try {
+      // Only this employee's real, scored quarterly reviews feed the AI — nothing is invented.
+      const reviews = (await api.getReviews({ employeeId: selectedEmployee.id }))
+        .filter((r) => (r.reviewType || 'QUARTERLY') === 'QUARTERLY' && (r.finalScore ?? 0) > 0)
+        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+      if (reviews.length === 0) {
+        setAiError(`${selectedEmployee.name} has no scored quarterly reviews yet, so there is nothing to summarise.`);
+        return;
+      }
+
+      const latest = reviews[reviews.length - 1];
+      const annualScore = Number((reviews.reduce((sum, r) => sum + (r.finalScore || 0), 0) / reviews.length).toFixed(2));
+
       const payload = {
         employeeName: selectedEmployee.name,
-        designation: selectedEmployee.designationName || selectedEmployee.designationId || 'Senior Specialist',
-        department: selectedEmployee.departmentName || selectedEmployee.departmentId || 'Engineering & Technology',
-        quarterlyScores: [
-          { quarter: 'Q1', score: 4.4, reviewNotes: 'Completed core database migration on schedule.' },
-          { quarter: 'Q2', score: 4.7, reviewNotes: 'Led multi-tenant performance refactor, exceeding latency targets.' },
-          { quarter: 'Q3', score: 4.5, reviewNotes: 'Proactive mentor for 2 new engineers on microservice deployment.' },
-          { quarter: 'Q4', score: 4.6, reviewNotes: 'Delivered high-impact architectural roadmap with zero regressions.' },
-        ],
-        annualScore: 4.55,
-        kraSummary: [
-          { title: 'Core Deliverables & Architecture', weightage: 40, target: '>=99.9% uptime and zero high-severity bugs' },
-          { title: 'Code Review & Team Velocity', weightage: 30, target: '24-hour turnaround on PR reviews' },
-          { title: 'Innovation & Documentation', weightage: 30, target: 'Publish 4 technical RFCs and optimization docs' },
-        ],
+        designation: selectedEmployee.designationName || '',
+        department: selectedEmployee.departmentName || '',
+        quarterlyScores: reviews.map((r) => ({
+          quarter: r.reviewPeriodName || 'Quarterly review',
+          score: r.finalScore as number,
+          reviewNotes: [r.managerOverallComments, r.strengths].filter(Boolean).join(' ') || undefined,
+        })),
+        annualScore,
+        kraSummary: (latest.kraSnapshot || []).map((k) => ({
+          title: k.kraName || k.title || '',
+          weightage: k.weight || 0,
+          target: k.targetSnapshot || '',
+        })).filter((k) => k.title),
         perspective: synthesisPerspective,
       };
 
@@ -131,7 +137,7 @@ export const AiPerformanceHub: React.FC<AiPerformanceHubProps> = ({ currentUser 
         setSynthesisResult(res.data);
       }
     } catch (err: any) {
-      console.error('Synthesis error:', err);
+      setAiError(err?.message || 'The AI assistant could not draft a summary.');
     } finally {
       setSynthesizing(false);
     }
@@ -146,9 +152,9 @@ export const AiPerformanceHub: React.FC<AiPerformanceHubProps> = ({ currentUser 
       const underCount = talentRecords.filter((t) => t.performanceLevel === 'low').length;
       const flightRiskCount = talentRecords.filter((t) => t.flightRisk === 'high' || t.flightRisk === 'medium').length;
 
+      setAiError(null);
       const res = await api.generateAiTalentInsights({
-        department: 'All Departments (Executive Rollup)',
-        cycleName: 'Annual Calibration Cycle F (Sep)',
+        department: 'All departments',
         talentPoolSummary: {
           totalEmployees: talentRecords.length,
           highPerformersCount: highPerformers,
@@ -162,7 +168,7 @@ export const AiPerformanceHub: React.FC<AiPerformanceHubProps> = ({ currentUser 
         setTalentInsights(res.data);
       }
     } catch (err: any) {
-      console.error('Talent insights error:', err);
+      setAiError(err?.message || 'The AI assistant could not generate insights.');
     } finally {
       setGeneratingInsights(false);
     }
@@ -190,7 +196,7 @@ export const AiPerformanceHub: React.FC<AiPerformanceHubProps> = ({ currentUser 
       <div id="ai_hub_tabs" className="flex border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-t-xl px-4 pt-3 overflow-x-auto gap-2">
         <button
           id="tab_btn_synthesis"
-          onClick={() => setActiveTab('synthesis')}
+          onClick={() => { setActiveTab('synthesis'); setAiError(null); }}
           className={`pb-3 px-4 text-sm font-semibold border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap ${
             activeTab === 'synthesis'
               ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400'
@@ -203,7 +209,7 @@ export const AiPerformanceHub: React.FC<AiPerformanceHubProps> = ({ currentUser 
 
         <button
           id="tab_btn_nine_box"
-          onClick={() => setActiveTab('nine_box')}
+          onClick={() => { setActiveTab('nine_box'); setAiError(null); }}
           className={`pb-3 px-4 text-sm font-semibold border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap ${
             activeTab === 'nine_box'
               ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400'
@@ -307,12 +313,18 @@ export const AiPerformanceHub: React.FC<AiPerformanceHubProps> = ({ currentUser 
 
               {/* Output Display Column */}
               <div className="lg:col-span-2 space-y-4">
-                {!synthesisResult && !synthesizing && (
+                {aiError && !synthesizing && (
+                  <div role="alert" className="p-4 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 text-sm text-amber-900 dark:text-amber-200">
+                    {aiError}
+                  </div>
+                )}
+
+                {!synthesisResult && !synthesizing && !aiError && (
                   <div className="h-full flex flex-col items-center justify-center p-8 text-center bg-slate-50 dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl min-h-[360px]">
                     <Sparkles className="w-12 h-12 text-indigo-300 dark:text-indigo-500 mb-3" />
                     <h3 className="text-base font-semibold text-slate-700 dark:text-slate-200">Ready to draft a review summary</h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mt-1">
-                      Pick an employee on the left. Gemini reads their last four quarters of KRA scores and recognitions, and drafts a review summary for you to edit.
+                      Pick an employee on the left. Gemini reads their scored quarterly reviews and KRAs, and drafts a review summary for you to edit.
                     </p>
                   </div>
                 )}
@@ -463,6 +475,12 @@ export const AiPerformanceHub: React.FC<AiPerformanceHubProps> = ({ currentUser 
           </div>
 
           {/* AI Insights Card (if generated) */}
+          {aiError && !generatingInsights && !talentInsights && (
+            <div role="alert" className="p-4 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 text-sm text-amber-900 dark:text-amber-200">
+              {aiError}
+            </div>
+          )}
+
           {talentInsights && (
             <div className="bg-indigo-950 text-white rounded-xl p-5 border border-indigo-900 space-y-4 animate-in fade-in duration-300">
               <div className="flex items-center justify-between border-b border-indigo-800/80 pb-3">
