@@ -155,7 +155,7 @@ The system supports six distinct enterprise roles with strict server-side author
 - **`HOD` (Head of Department)**: Department-wide calibration, scorecard approvals, reviewing returned manager scores, department PIP oversight.
 - **`HR` / `SUPER_ADMIN`**: Full administrative governance, review period creation, annual appraisal finalization, letter release, and audit compliance.
 - **`MANAGEMENT`**: Executive dashboard, bell-curve compliance, workforce attrition risk analysis, and department benchmarking.
-- **Persona Switcher (Dev Mode)**: Fast switching between test users to validate multi-tier workflow handoffs. Shown in development builds, or in production only when `VITE_ENABLE_DEMO_PERSONAS=true`.
+- **Persona Switcher (Dev Mode)**: Fast switching between test users to validate multi-tier workflow handoffs. Shown only when `VITE_ENABLE_DEMO_PERSONAS=true` (in any build), together with the login page "Demo users" panel.
 
 ---
 
@@ -360,7 +360,7 @@ RESEND_FROM=
 # Optional: Backend API Base URL, without /api (defaults to http://localhost:3000 on localhost, relative /api in production)
 VITE_API_BASE_URL=http://localhost:3000
 
-# Optional: show the demo persona switcher in production builds (always shown in dev)
+# Optional: show the demo persona switcher and login "Demo users" panel (hidden unless true)
 VITE_ENABLE_DEMO_PERSONAS=false
 ```
 

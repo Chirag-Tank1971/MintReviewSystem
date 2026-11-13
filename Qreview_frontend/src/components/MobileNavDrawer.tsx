@@ -192,7 +192,7 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({
           )}
 
           {/* Demo role switcher (development / demo builds only) */}
-          {(!import.meta.env.PROD || import.meta.env.VITE_ENABLE_DEMO_PERSONAS === 'true') && (
+          {import.meta.env.VITE_ENABLE_DEMO_PERSONAS === 'true' && (
             <div className="pt-3 border-t border-slate-200 dark:border-slate-800">
               <div className="px-2.5 pb-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">Switch role (demo)</div>
               <div className="grid grid-cols-2 gap-1.5">

@@ -208,12 +208,12 @@ export const LoginPage: React.FC = () => {
             </p>
 
             <div className="mt-3 sm:mt-4">
-              {/* Demo users: development builds only */}
-              {import.meta.env.DEV && (
+              {/* Demo users: only when VITE_ENABLE_DEMO_PERSONAS=true */}
+              {import.meta.env.VITE_ENABLE_DEMO_PERSONAS === 'true' && (
                 <div className="mb-2.5 sm:mb-3 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 p-2 sm:p-2.5 space-y-1.5">
                   <div className="flex items-baseline justify-between">
                     <span className="text-xs font-medium text-slate-800 dark:text-slate-200">Demo users</span>
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400">Dev only</span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400">Demo only</span>
                   </div>
 
                   <div className="grid grid-cols-3 gap-1">

@@ -213,7 +213,7 @@ export const Header: React.FC<HeaderProps> = ({
               {user ? (
                 <>
                   {/* Role Indicator / Switcher Pill */}
-                  {(!import.meta.env.PROD || import.meta.env.VITE_ENABLE_DEMO_PERSONAS === 'true') ? (
+                  {import.meta.env.VITE_ENABLE_DEMO_PERSONAS === 'true' ? (
                     <div className="relative" ref={personaDropdownRef}>
                       <button
                         onClick={() => setIsPersonaMenuOpen(!isPersonaMenuOpen)}
