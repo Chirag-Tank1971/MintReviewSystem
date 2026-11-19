@@ -1046,13 +1046,14 @@ reviewRouter.put(
       return res.status(404).json({ error: 'Review not found.' });
     }
 
-    // Role check: Only assigned reporting manager, HR, or Super Admin can score. HOD cannot score reviews.
+    // Only the review's assigned manager, HR, or Super Admin can score. This checks the actual manager
+    // relationship, not the role label, so an HOD who is the assigned manager (a direct report) can
+    // save drafts just as they can submit. An HOD who is not the assigned manager stays view-only.
     const isAssignedManager =
-      (req.user?.role === 'REPORTING_MANAGER' || req.user?.role === 'MANAGER') &&
-      (req.user?.employeeId === existing.managerId ||
-       req.user?.id === existing.managerId ||
-       Boolean(req.user?.employeeId && existing.managerIds?.includes(req.user.employeeId)) ||
-       Boolean(req.user?.id && existing.managerIds?.includes(req.user.id)));
+      req.user?.employeeId === existing.managerId ||
+      req.user?.id === existing.managerId ||
+      Boolean(req.user?.employeeId && existing.managerIds?.includes(req.user.employeeId)) ||
+      Boolean(req.user?.id && existing.managerIds?.includes(req.user.id));
     const isSuperAdminOrHr = req.user?.role === 'SUPER_ADMIN' || req.user?.role === 'HR';
 
     if (!isAssignedManager && !isSuperAdminOrHr) {

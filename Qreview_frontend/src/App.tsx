@@ -66,8 +66,8 @@ const DepartmentHierarchyView = lazy(() =>
 const PerformanceImprovementPlansView = lazy(() =>
   import('./components/PerformanceImprovementPlansView').then((m) => ({ default: m.PerformanceImprovementPlansView }))
 );
-const SalesChampsView = lazy(() =>
-  import('./components/SalesChampsView').then((m) => ({ default: m.SalesChampsView }))
+const SalesHub = lazy(() =>
+  import('./components/SalesHub').then((m) => ({ default: m.SalesHub }))
 );
 
 // Modals lazy loaded on demand
@@ -358,7 +358,7 @@ function AppContent() {
                     }}
                   />
                 ) : currentView === 'sales_champs' ? (
-                  <SalesChampsView employees={employees} departments={departments} />
+                  <SalesHub employees={employees} departments={departments} />
                 ) : currentView === 'employees' && ['SUPER_ADMIN', 'HR'].includes(user?.role || '') ? (
                   <EmployeeDirectory
                     currentUser={user}

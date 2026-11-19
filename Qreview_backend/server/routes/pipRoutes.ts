@@ -37,6 +37,8 @@ export function formatPipDate(iso: string): string {
 function canAccessEmployeePip(req: AuthenticatedRequest, pip: PerformanceImprovementPlan): boolean {
   const role = req.user?.role;
   if (role === 'SUPER_ADMIN' || role === 'HR' || role === 'MANAGEMENT') return true;
+  // A draft is HR's working copy; the employee, manager and HOD only see a plan once it is published
+  if (pip.status === 'DRAFT') return false;
   const myEmployeeId = req.user?.employeeId;
   if (!myEmployeeId) return false;
   if (pip.employeeId === myEmployeeId) return true; // the employee themselves
@@ -73,7 +75,9 @@ pipRouter.get('/pips', async (req: AuthenticatedRequest, res: Response) => {
 
     const { status } = req.query;
     const plans: PerformanceImprovementPlan[] = await (await pipCol.find(query)).toArray();
-    const filtered = status ? plans.filter((p) => p.status === status) : plans;
+    const seesDrafts = role === 'SUPER_ADMIN' || role === 'HR' || role === 'MANAGEMENT';
+    const visible = seesDrafts ? plans : plans.filter((p) => p.status !== 'DRAFT');
+    const filtered = status ? visible.filter((p) => p.status === status) : visible;
 
     filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     res.json(filtered);

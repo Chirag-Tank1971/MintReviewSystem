@@ -2066,6 +2066,49 @@ export const api = {
     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'Failed to delete.'); }
   },
 
+  // ─── Sales Achievement ────────────────────────────────────────────────────
+
+  getAchievementReports: async (): Promise<any[]> => {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/achievement-reports`, { headers: getAuthHeaders() });
+    if (!res.ok) throw new Error('Failed to load achievement reports.');
+    return res.json();
+  },
+
+  getMyAchievementReports: async (): Promise<any[]> => {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/achievement-reports/mine`, { headers: getAuthHeaders() });
+    if (!res.ok) throw new Error('Failed to load your achievement report.');
+    return res.json();
+  },
+
+  createAchievementReport: async (data: any): Promise<any> => {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/achievement-reports`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(data) });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'Failed to create report.'); }
+    return res.json();
+  },
+
+  updateAchievementReport: async (id: string, data: any): Promise<any> => {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/achievement-reports/${id}`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(data) });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'Failed to update report.'); }
+    return res.json();
+  },
+
+  finalizeAchievementReport: async (id: string): Promise<any> => {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/achievement-reports/${id}/finalize`, { method: 'POST', headers: getAuthHeaders() });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'Failed to finalize report.'); }
+    return res.json();
+  },
+
+  lockAchievementReport: async (id: string): Promise<any> => {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/achievement-reports/${id}/lock`, { method: 'POST', headers: getAuthHeaders() });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'Failed to lock report.'); }
+    return res.json();
+  },
+
+  deleteAchievementReport: async (id: string): Promise<void> => {
+    const res = await fetchWithAutoRefresh(`${API_BASE}/achievement-reports/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'Failed to delete report.'); }
+  },
+
   getMySalesChampsReports: async (employeeId: string, financialYear?: string): Promise<any[]> => {
     const qs = new URLSearchParams();
     if (financialYear) qs.set('financialYear', financialYear);

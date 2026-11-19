@@ -25,6 +25,7 @@ import { renderAppraisalLetterReleasedEmail } from '../services/emailTemplates.j
 import { getActivePipForEmployee } from '../services/pipService.js';
 import { checkDepartmentBudget, getDepartmentBudgetSnapshot } from '../services/departmentBudget.js';
 import { computeAppraisalMatrix, buildQuarterlyRollup, getRatingBand, RatingBand, refreshAppraisalScore } from '../services/appraisalScoring.js';
+import { appraisalForViewer } from '../services/appraisalVisibility.js';
 import { allOf, employeeIdsWhere, employeeStatusMap, escapeRegex, exactCi, isSet, searchFilter } from '../queryHelpers.js';
 
 export const appraisalRouter = Router();
@@ -244,7 +245,10 @@ appraisalRouter.get('/appraisals', async (req: AuthenticatedRequest, res: Respon
     });
 
     res.json(
-      appraisals.map((a) => ({ ...a, employeeStatus: statusById.get(a.employeeId) || a.employeeStatus || 'ACTIVE' }))
+      appraisals.map((a) => appraisalForViewer(
+        { ...a, employeeStatus: statusById.get(a.employeeId) || a.employeeStatus || 'ACTIVE' },
+        user
+      ))
     );
   } catch (err: any) {
     console.error('Error in GET /api/appraisals:', err);
@@ -806,10 +810,12 @@ appraisalRouter.get('/appraisals/:id', async (req: AuthenticatedRequest, res: Re
       }
     }
 
-    res.json({
-      ...appraisal,
-      employeeStatus: empRecord?.status || appraisal.employeeStatus || 'ACTIVE',
-    });
+    res.json(
+      appraisalForViewer(
+        { ...appraisal, employeeStatus: empRecord?.status || appraisal.employeeStatus || 'ACTIVE' },
+        user
+      )
+    );
   } catch (err: any) {
     console.error('Error in GET /api/appraisals/:id:', err);
     res.status(500).json({ error: 'Failed to fetch appraisal' });
@@ -1868,6 +1874,12 @@ appraisalRouter.get('/appraisals/:id/letter', async (req: AuthenticatedRequest, 
       }
     }
 
+    // The letter states the revised pay, which is only final once the appraisal is locked.
+    // HR and Super Admin can still preview it earlier.
+    if (!appraisal.isLocked && user.role !== 'SUPER_ADMIN' && user.role !== 'HR') {
+      return res.status(403).json({ error: 'The appraisal letter is available once the appraisal has been finalized and locked.' });
+    }
+
     const currentMonthly = Math.round(appraisal.currentCtc / 12);
     const revisedMonthly = Math.round(appraisal.revisedCtc / 12);
     const monthlyIncrement = revisedMonthly - currentMonthly;
@@ -1956,6 +1968,11 @@ appraisalRouter.put(
     // Only the target employee or Super Admin can acknowledge the appraisal letter
     if (user.role !== 'SUPER_ADMIN' && user.employeeId !== appraisal.employeeId) {
       return res.status(403).json({ error: 'Unauthorized: You can only acknowledge your own appraisal letter.' });
+    }
+
+    // Signing off only makes sense on a final, locked appraisal
+    if (!appraisal.isLocked) {
+      return res.status(400).json({ error: 'This appraisal has not been finalized yet, so it cannot be acknowledged.' });
     }
 
     const acknowledgedAt = new Date().toISOString();

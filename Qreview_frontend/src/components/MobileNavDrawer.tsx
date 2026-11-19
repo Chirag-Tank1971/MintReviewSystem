@@ -17,6 +17,7 @@ import { useTheme } from '../context/ThemeContext';
 import { UserRole } from '../types';
 import { NAV_ITEMS, NavItemConfig, getNavLabel, getNavSubtitle, isNavItemVisible } from '../config/navigation';
 import { useHasSalesChamps } from '../hooks/useHasSalesChamps';
+import { useHasAchievement } from '../hooks/useHasAchievement';
 import { useModalAnimation } from '../hooks/useModalAnimation';
 
 import { AppLogo } from './ui/AppLogo';
@@ -71,6 +72,7 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({
   }, [isOpen, handleClose]);
 
   const showSalesChamps = useHasSalesChamps(user?.role, user?.employeeId);
+  const showAchievement = useHasAchievement(user?.role, user?.employeeId);
 
   if (!isMounted) return null;
   if (typeof document === 'undefined') return null;
@@ -82,7 +84,7 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({
   // Both lists derive from the shared NAV_ITEMS registry (frontend/src/config/navigation.ts)
   // instead of hand-duplicating labels/icons/roles here — see that file's header comment for why.
   const visibleNavItems = NAV_ITEMS.filter(
-    (item) => isNavItemVisible(item, userRole) && (item.id !== 'sales_champs' || showSalesChamps)
+    (item) => isNavItemVisible(item, userRole) && (item.id !== 'sales_champs' || showSalesChamps || showAchievement)
   );
   const primaryNavItems = visibleNavItems.filter((item) => item.mobileSection === 'primary');
   const adminNavItems = visibleNavItems.filter((item) => item.mobileSection === 'admin');

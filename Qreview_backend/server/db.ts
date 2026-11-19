@@ -326,6 +326,7 @@ export const memoryDb = {
   performanceImprovementPlans: new InMemoryCollection<PerformanceImprovementPlan>('performance_improvement_plans', []),
   reviewReturnDrafts: new InMemoryCollection<ReviewReturnDraft>('review_return_drafts', []),
   salesChampsReports: new InMemoryCollection<any>('sales_champs_reports', []),
+  achievementReports: new InMemoryCollection<any>('achievement_reports', []),
   systemConfig: new InMemoryCollection<SystemConfig>('system_config', [
     { id: 'default', hodApprovalEnabled: false, selfAssessmentEnabled: false, updatedAt: new Date().toISOString() },
   ]),
@@ -389,6 +390,7 @@ const MONGO_COLLECTION_MAP: Record<string, string> = {
   performanceImprovementPlans: 'performance_improvement_plans',
   reviewReturnDrafts: 'review_return_drafts',
   salesChampsReports: 'sales_champs_reports',
+  achievementReports: 'achievement_reports',
 };
 
 /** Which storage engine is active. Maintenance scripts must refuse to run on the embedded fallback. */
@@ -458,6 +460,9 @@ async function ensureMongoIndexes(): Promise<void> {
     ['performanceImprovementPlans', { status: 1 }],
     ['performanceImprovementPlans', { managerId: 1 }],
     ['performanceImprovementPlans', { hodId: 1 }],
+
+    ['achievementReports', { financialYear: 1 }],
+    ['achievementReports', { status: 1 }],
 
     ['auditLogs', { createdAt: -1 }],
     ['auditLogs', { module: 1, createdAt: -1 }],

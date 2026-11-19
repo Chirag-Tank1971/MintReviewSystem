@@ -1,6 +1,7 @@
 import express, { Response } from 'express';
 import { getDbCollection } from '../db.js';
 import { AuthenticatedRequest, authenticateToken } from '../auth.js';
+import { appraisalForViewer } from '../services/appraisalVisibility.js';
 import {
   Employee,
   EmployeeReview,
@@ -238,8 +239,8 @@ essRouter.get('/ess/overview/:employeeId?', authenticateToken, async (req: Authe
 
     res.json({
       employee,
-      activeAppraisal,
-      allAppraisals: appraisals,
+      activeAppraisal: activeAppraisal ? appraisalForViewer(activeAppraisal, req.user!) : null,
+      allAppraisals: appraisals.map((a) => appraisalForViewer(a, req.user!)),
       reviews,
       activeKraTemplate,
       periods,

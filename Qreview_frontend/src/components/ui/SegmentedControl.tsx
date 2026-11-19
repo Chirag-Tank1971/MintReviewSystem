@@ -14,10 +14,12 @@ interface SegmentedControlProps<T extends string> {
   /** Names the group for screen readers, e.g. "Dashboard view". */
   ariaLabel: string;
   className?: string;
+  /** Filled, high-contrast selected tab. Use for primary page-level tabs. */
+  strong?: boolean;
 }
 
 /** A small set of mutually exclusive views, shown as one joined row of buttons. */
-export function SegmentedControl<T extends string>({ options, value, onChange, ariaLabel, className }: SegmentedControlProps<T>) {
+export function SegmentedControl<T extends string>({ options, value, onChange, ariaLabel, className, strong }: SegmentedControlProps<T>) {
   return (
     <div role="group" aria-label={ariaLabel} className={cn('inline-flex p-0.5 rounded-md bg-slate-100 dark:bg-slate-800', className)}>
       {options.map(({ value: v, label, icon: Icon }) => {
@@ -30,8 +32,11 @@ export function SegmentedControl<T extends string>({ options, value, onChange, a
             onClick={() => onChange(v)}
             className={cn(
               'inline-flex items-center gap-1.5 h-7 px-3 text-xs font-medium rounded transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500',
+              strong && 'h-9 px-4 text-sm font-semibold',
               isActive
-                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
+                ? strong
+                  ? 'bg-indigo-700 dark:bg-indigo-500 text-white shadow-sm'
+                  : 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
             )}
           >

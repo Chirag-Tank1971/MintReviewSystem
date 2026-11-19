@@ -22,6 +22,7 @@ import { managementRouter } from './routes/managementRoutes.js';
 import { pipRouter } from './routes/pipRoutes.js';
 import { dashboardRouter } from './routes/dashboardRoutes.js';
 import { salesChampsRouter } from './routes/salesChampsRoutes.js';
+import { achievementRouter } from './routes/achievementRoutes.js';
 
 export interface CreateAppOptions {
   /** Request logger used for slow-request lines (kept on in production). */
@@ -210,6 +211,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   app.use('/api', managementRouter);
   app.use('/api', dashboardRouter);
   app.use('/api', salesChampsRouter);
+  app.use('/api', achievementRouter);
 
   // Standard JSON 404 for unmatched /api routes
   app.all('/api/*', (_req, res) => {

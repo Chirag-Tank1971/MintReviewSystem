@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './Tool
 import { cn } from '../../utils/cn';
 import { NAV_ITEMS, getNavLabel, isNavItemVisible, NavItemConfig } from '../../config/navigation';
 import { useHasSalesChamps } from '../../hooks/useHasSalesChamps';
+import { useHasAchievement } from '../../hooks/useHasAchievement';
 
 interface SidebarProps {
   currentView: AppView;
@@ -48,6 +49,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const role = user?.role;
   const showSalesChamps = useHasSalesChamps(role, user?.employeeId);
+  const showAchievement = useHasAchievement(role, user?.employeeId);
 
   const navGroups: NavGroup[] = GROUP_ORDER.map((title) => ({
     title,
@@ -56,7 +58,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         item.group === title &&
         item.inSidebar !== false &&
         isNavItemVisible(item, role) &&
-        (item.id !== 'sales_champs' || showSalesChamps)
+        (item.id !== 'sales_champs' || showSalesChamps || showAchievement)
     ),
   })).filter((group) => group.items.length > 0);
 
