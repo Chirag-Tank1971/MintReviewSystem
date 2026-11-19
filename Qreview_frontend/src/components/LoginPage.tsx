@@ -141,7 +141,7 @@ export const LoginPage: React.FC = () => {
   const isActionLocked = isLoading || isSubmitting;
 
   return (
-    <div className="h-dvh max-h-dvh w-full overflow-hidden flex bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans antialiased">
+    <div className="min-h-dvh lg:h-dvh lg:max-h-dvh w-full lg:overflow-hidden flex bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans antialiased">
       {/* Brand panel (large screens): what MintReview does, shown with the app's own rating scale */}
       <aside className="hidden lg:flex lg:w-[46%] xl:w-1/2 flex-col justify-between h-full max-h-screen overflow-hidden bg-indigo-900 dark:bg-indigo-950 text-white px-8 xl:px-14 py-6 xl:py-8 shrink-0">
         <div className="flex items-center gap-2.5 shrink-0">
@@ -177,8 +177,8 @@ export const LoginPage: React.FC = () => {
       </aside>
 
       {/* Sign-in */}
-      <div className="flex-1 flex flex-col justify-between h-full max-h-screen overflow-y-auto bg-slate-50 dark:bg-slate-950 lg:bg-white lg:dark:bg-slate-950">
-        <header className="px-4 sm:px-8 py-2.5 sm:py-3 flex items-center justify-between lg:justify-end shrink-0">
+      <div className="flex-1 flex flex-col lg:justify-between lg:h-full lg:max-h-screen lg:overflow-y-auto bg-slate-50 dark:bg-slate-950 lg:bg-white lg:dark:bg-slate-950">
+        <header className="hidden lg:flex px-8 py-3 items-center justify-end shrink-0">
           <div className="flex items-center gap-2 lg:hidden">
             <AppLogo className="w-7 h-7" />
             <span className="text-base font-semibold text-slate-900 dark:text-white">MintReview</span>
@@ -196,10 +196,36 @@ export const LoginPage: React.FC = () => {
           </button>
         </header>
 
-        <main className="flex-1 w-full px-4 sm:px-8 flex items-center justify-center my-auto min-h-0">
-          <div className="w-full max-w-sm py-1">
+        {/* Phones and tablets: brand band; the sign-in card overlaps its bottom edge */}
+        <div className="lg:hidden relative bg-indigo-900 dark:bg-indigo-950 text-white px-5 sm:px-8 pt-5 pb-16 rounded-b-3xl">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <AppLogo className="w-8 h-8" />
+              <span className="text-lg font-semibold tracking-tight">MintReview</span>
+            </div>
+            <button
+              type="button"
+              onClick={toggleTheme}
+              id="login-theme-toggle-btn-mobile"
+              className="p-2 -mr-2 rounded-lg text-indigo-100 hover:bg-white/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+              title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+              aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {isDark ? <Sun className="w-5 h-5 text-amber-300" /> : <Moon className="w-5 h-5" />}
+            </button>
+          </div>
+          <h2 className="mt-7 text-2xl sm:text-3xl font-semibold leading-tight tracking-tight">
+            Every rating comes with its reason.
+          </h2>
+          <p className="mt-2 text-sm text-indigo-100/85 leading-relaxed max-w-md">
+            Self-assessments, manager and HOD scoring, and HR approval, on one scale everyone can read.
+          </p>
+        </div>
+
+        <main className="relative z-10 w-full px-4 sm:px-8 -mt-10 pb-6 lg:mt-0 lg:pb-0 flex-1 flex items-start lg:items-center justify-center lg:my-auto lg:min-h-0">
+          <div className="w-full max-w-sm sm:max-w-md lg:max-w-sm rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-lg shadow-slate-900/10 p-5 sm:p-7 lg:p-0 lg:py-1 lg:rounded-none lg:bg-transparent lg:dark:bg-transparent lg:border-0 lg:shadow-none">
             <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 dark:text-white">Welcome back</h1>
-            <p className="mt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+            <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
               Sign in with your employee ID or work email.
             </p>
 
@@ -264,7 +290,7 @@ export const LoginPage: React.FC = () => {
                 </div>
               )}
 
-              <form onSubmit={handleSubmit} className="space-y-2.5 sm:space-y-3">
+              <form onSubmit={handleSubmit} className="space-y-4 lg:space-y-3">
                 <div className="space-y-1">
                   <label htmlFor="login-email" className={LABEL_CLASS}>
                     Employee ID or work email
@@ -278,7 +304,7 @@ export const LoginPage: React.FC = () => {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="name@company.com or MS0001"
                     disabled={isActionLocked}
-                    className={INPUT_CLASS}
+                    className={`${INPUT_CLASS} h-12 text-base lg:h-auto lg:text-sm`}
                   />
                 </div>
 
@@ -292,7 +318,7 @@ export const LoginPage: React.FC = () => {
                       onClick={() => setShowForgotInfo(!showForgotInfo)}
                       aria-expanded={showForgotInfo}
                       aria-controls="login-forgot-help"
-                      className="text-xs font-medium text-indigo-700 dark:text-indigo-400 hover:underline cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                      className="text-sm lg:text-xs font-medium text-indigo-700 dark:text-indigo-400 hover:underline cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                     >
                       Forgot your password?
                     </button>
@@ -306,12 +332,12 @@ export const LoginPage: React.FC = () => {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       disabled={isActionLocked}
-                      className={`${INPUT_CLASS} pr-10`}
+                      className={`${INPUT_CLASS} h-12 text-base lg:h-auto lg:text-sm pr-12 lg:pr-10`}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 px-3 flex items-center text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors cursor-pointer rounded-r-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                      className="absolute inset-y-0 right-0 px-3.5 lg:px-3 flex items-center text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors cursor-pointer rounded-r-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                       title={showPassword ? 'Hide password' : 'Show password'}
                       aria-label={showPassword ? 'Hide password' : 'Show password'}
                     >
@@ -332,7 +358,7 @@ export const LoginPage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={isActionLocked}
-                  className="w-full py-2 sm:py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-md text-sm transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500 dark:focus-visible:ring-offset-slate-950 mt-1"
+                  className="w-full py-3 lg:py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg lg:rounded-md text-base lg:text-sm transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500 dark:focus-visible:ring-offset-slate-950 mt-1"
                 >
                   {isActionLocked && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
                   {isActionLocked ? 'Signing in…' : 'Sign in'}
@@ -342,7 +368,7 @@ export const LoginPage: React.FC = () => {
           </div>
         </main>
 
-        <footer className="px-4 sm:px-8 py-2 text-xs text-slate-500 shrink-0 text-center sm:text-left">
+        <footer className="px-4 sm:px-8 py-3 lg:py-2 text-xs text-slate-500 shrink-0 text-center lg:text-left mt-auto lg:mt-0">
           © {new Date().getFullYear()} MintReview
         </footer>
       </div>
