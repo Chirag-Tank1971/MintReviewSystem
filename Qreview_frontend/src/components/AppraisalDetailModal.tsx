@@ -820,30 +820,30 @@ export const AppraisalDetailModal: React.FC<AppraisalDetailModalProps> = ({
                 </div>
 
                 {/* Promotion Section */}
-                <div className="p-5 bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700/80 rounded-xl space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Award className="w-4 h-4 text-amber-500" />
+                <div className="p-4 sm:p-5 bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700/80 rounded-xl space-y-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                      <Award className="w-4 h-4 shrink-0 text-amber-500" />
                       <h4 className="text-sm font-bold text-slate-900 dark:text-white">Promotion recommendation</h4>
                       {isLocked && (
-                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-600 flex items-center gap-1">
+                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-600 flex items-center gap-1 shrink-0">
                           <Lock className="w-3 h-3 text-slate-500 dark:text-slate-400" />
                           <span>Locked</span>
                         </span>
                       )}
                     </div>
 
-                    <label className={`flex items-center gap-2 ${!canEdit ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}>
+                    <label className={`flex items-center gap-2.5 shrink-0 max-sm:w-full max-sm:min-h-11 max-sm:px-3 max-sm:rounded-lg max-sm:border max-sm:border-slate-200 dark:max-sm:border-slate-700 max-sm:bg-slate-50 dark:max-sm:bg-slate-900/40 ${!canEdit ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}>
                       <input
                         type="checkbox"
                         checked={promotionRecommended}
                         disabled={!canEdit}
                         onChange={(e) => setPromotionRecommended(e.target.checked)}
-                        className={`w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 ${
+                        className={`w-5 h-5 sm:w-4 sm:h-4 shrink-0 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 ${
                           !canEdit ? 'cursor-not-allowed' : ''
                         }`}
                       />
-                      <span className="text-xs font-semibold text-slate-700 select-none">
+                      <span className="text-sm sm:text-xs font-semibold text-slate-700 dark:text-slate-200 select-none whitespace-nowrap">
                         Recommend for promotion
                       </span>
                     </label>
@@ -852,7 +852,7 @@ export const AppraisalDetailModal: React.FC<AppraisalDetailModalProps> = ({
                   {promotionRecommended && (
                     <div className="p-4 bg-amber-50/50 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/60 rounded-xl space-y-3">
                       <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
                           <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
                             Proposed promoted designation <span className="text-red-500">*</span>
                           </label>

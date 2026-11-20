@@ -464,13 +464,13 @@ export const DepartmentHierarchyView: React.FC<DepartmentHierarchyViewProps> = (
                   aria-expanded={isOpen}
                   className="w-full flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500"
                 >
-                  <span className="flex items-center gap-2 min-w-0 flex-1">
+                  <span className="flex items-center gap-2 min-w-0 w-full sm:w-auto sm:flex-1">
                     <ChevronRight
                       className={`w-4 h-4 shrink-0 text-slate-400 transition-transform ${isOpen ? 'rotate-90' : ''}`}
                       aria-hidden="true"
                     />
-                    <span className="text-sm font-semibold text-slate-900 dark:text-white">{department.name}</span>
-                    <span className="text-[11px] tabular-nums px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                    <span className="text-sm font-semibold text-slate-900 dark:text-white min-w-0 truncate">{department.name}</span>
+                    <span className="shrink-0 text-[11px] tabular-nums px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
                       {department.code}
                     </span>
                   </span>
