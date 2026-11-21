@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { TrendingUp, Plus, Pencil, Lock, CheckCircle2, Trash2, Download, Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { TrendingUp, Plus, Pencil, Lock, CheckCircle2, Trash2, Download, Loader2, AlertTriangle, RefreshCw, ChevronRight } from 'lucide-react';
 import { Employee, Department } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
@@ -8,7 +8,6 @@ import { PageHeader } from './ui/PageHeader';
 import { Button } from './ui/Button';
 import { StatusBadge } from './ui/StatusBadge';
 import { EmptyState } from './ui/EmptyState';
-import { SELECT_CLASS } from './ui/formStyles';
 import { AchievementReportModal } from './AchievementReportModal';
 import {
   AchievementReport, sheetTotals, sheetTitle, percentAchievement, formatAmount, formatPercent, downloadAchievementXlsx,
@@ -33,7 +32,13 @@ const TD_NUM = 'px-4 py-3.5 text-right tabular-nums text-slate-800 dark:text-sla
 
 /** Percentage as a number with a small bar, so the row reads at a glance. The bar is capped at 100%. */
 const PercentCell: React.FC<{ fraction: number | null }> = ({ fraction }) => {
-  if (fraction === null) return <span className="text-slate-400 dark:text-slate-500" aria-label="Not set">—</span>;
+  if (fraction === null) {
+    return (
+      <div className="flex justify-end">
+        <span className="w-16 text-right text-slate-400 dark:text-slate-500" aria-label="Not set">—</span>
+      </div>
+    );
+  }
   const width = Math.max(0, Math.min(100, fraction * 100));
   const tone = fraction >= 1 ? 'bg-emerald-500' : fraction >= 0.75 ? 'bg-indigo-500' : 'bg-amber-500';
   return (
@@ -103,7 +108,9 @@ export const AchievementView: React.FC<Props> = ({ employees, departments }) => 
   const manages = isAdmin || user?.role === 'HR';
 
   const [reports, setReports] = useState<AchievementReport[]>([]);
-  const [selectedId, setSelectedId] = useState<string>('');
+  // Which years' sections are expanded; the newest opens by default on first load
+  const [openIds, setOpenIds] = useState<string[]>([]);
+  const initialised = useRef(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -117,9 +124,14 @@ export const AchievementView: React.FC<Props> = ({ employees, departments }) => 
     try {
       const data: AchievementReport[] = (manages ? await api.getAchievementReports() : await api.getMyAchievementReports()) || [];
       setReports(data);
-      setSelectedId((cur) => {
-        const want = keepId || cur;
-        return data.some((r) => r.id === want) ? want : data[0]?.id || '';
+      // Read and flip the flag here, not inside the updater: React may run an updater twice
+      const isFirstLoad = !initialised.current;
+      initialised.current = true;
+      setOpenIds((cur) => {
+        const next = cur.filter((id) => data.some((r) => r.id === id));
+        if (keepId && data.some((r) => r.id === keepId) && !next.includes(keepId)) next.push(keepId);
+        if (isFirstLoad && !next.length && data[0]?.id) next.push(data[0].id);
+        return next;
       });
     } catch (err: any) {
       setLoadError(err?.message || 'Failed to load achievement reports.');
@@ -130,9 +142,9 @@ export const AchievementView: React.FC<Props> = ({ employees, departments }) => 
 
   useEffect(() => { load(); }, [load]);
 
-  const selected = useMemo(() => reports.find((r) => r.id === selectedId), [reports, selectedId]);
-  const status = selected ? STATUS_TONE[selected.status || 'DRAFT'] : null;
-  const isLocked = selected?.status === 'LOCKED';
+  const toggleReport = (id: string) =>
+    setOpenIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
+  const allOpen = reports.length > 0 && reports.every((r) => openIds.includes(r.id!));
 
   const handleSave = async (data: { financialYear: string; rows: AchievementReport['rows'] }) => {
     try {
@@ -190,10 +202,10 @@ export const AchievementView: React.FC<Props> = ({ employees, departments }) => 
         }
         actions={
           <>
-            {reports.length > 0 && (
-              <select aria-label="Financial year" value={selectedId} onChange={(e) => setSelectedId(e.target.value)} className={SELECT_CLASS}>
-                {reports.map((r) => <option key={r.id} value={r.id}>{r.financialYear}</option>)}
-              </select>
+            {reports.length > 1 && (
+              <Button onClick={() => setOpenIds(allOpen ? [] : reports.map((r) => r.id!))}>
+                {allOpen ? 'Collapse all' : 'Expand all'}
+              </Button>
             )}
             <Button icon={RefreshCw} iconSpin={isLoading} onClick={() => load()} aria-label="Refresh" />
             {manages && <Button variant="primary" icon={Plus} onClick={openCreate}>New report</Button>}
@@ -207,11 +219,11 @@ export const AchievementView: React.FC<Props> = ({ employees, departments }) => 
         </div>
       )}
 
-      {isLoading && !selected ? (
+      {isLoading && reports.length === 0 ? (
         <div className="flex items-center justify-center py-24 text-slate-500 dark:text-slate-400 text-sm">
           <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading…
         </div>
-      ) : !selected ? (
+      ) : reports.length === 0 ? (
         <EmptyState
           icon={TrendingUp}
           title={manages ? 'No achievement reports yet' : 'No achievement report yet'}
@@ -223,46 +235,74 @@ export const AchievementView: React.FC<Props> = ({ employees, departments }) => 
           action={manages ? { label: 'New report', onClick: openCreate, icon: Plus } : undefined}
         />
       ) : (
-        <section aria-label={sheetTitle(selected.financialYear)} className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              {status && <StatusBadge status={status.label} tone={status.tone} size="sm" />}
-              {manages && selected.updatedAt && (
-                <span className="text-xs text-slate-500 dark:text-slate-400">
-                  Updated {new Date(selected.updatedAt).toLocaleDateString('en-IN')}{selected.createdByName ? ` · created by ${selected.createdByName}` : ''}
-                </span>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button icon={busy === 'download' ? Loader2 : Download} iconSpin={busy === 'download'} disabled={!!busy}
-                onClick={() => run('download', () => downloadAchievementXlsx(selected, manages), 'Excel file downloaded.', selected.id)}>
-                Download Excel
-              </Button>
-              {manages && !isLocked && (
-                <Button icon={Pencil} disabled={!!busy} title={selected.status === 'FINAL' ? 'Edit (moves the report back to Draft)' : 'Edit'}
-                  onClick={() => { setEditing(selected); setIsModalOpen(true); }}>
-                  Edit
-                </Button>
-              )}
-              {manages && selected.status === 'DRAFT' && (
-                <Button icon={busy === 'finalize' ? Loader2 : CheckCircle2} iconSpin={busy === 'finalize'} disabled={!!busy}
-                  onClick={() => run('finalize', () => api.finalizeAchievementReport(selected.id!), 'Report marked as Final.', selected.id)}>
-                  Finalize
-                </Button>
-              )}
-              {isAdmin && selected.status === 'FINAL' && (
-                <Button variant="primary" icon={Lock} disabled={!!busy} onClick={() => setPendingConfirm({ kind: 'lock', report: selected })}>
-                  Lock
-                </Button>
-              )}
-              {isAdmin && !isLocked && (
-                <Button icon={Trash2} aria-label="Delete report" disabled={!!busy} onClick={() => setPendingConfirm({ kind: 'delete', report: selected })} />
-              )}
-            </div>
-          </div>
+        <div className="space-y-3">
+          {reports.map((report) => {
+            const status = STATUS_TONE[report.status || 'DRAFT'];
+            const isLocked = report.status === 'LOCKED';
+            const isOpen = openIds.includes(report.id!);
+            const panelId = `ach-panel-${report.id}`;
+            const count = report.rows.length;
+            return (
+              <section key={report.id} className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => toggleReport(report.id!)}
+                  aria-expanded={isOpen}
+                  aria-controls={panelId}
+                  className="w-full flex items-center gap-3 px-4 sm:px-5 py-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500"
+                >
+                  <ChevronRight className={cn('w-4 h-4 shrink-0 text-slate-400 transition-transform', isOpen && 'rotate-90')} aria-hidden="true" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold text-slate-900 dark:text-white">{report.financialYear}</span>
+                    <span className="block text-xs text-slate-500 dark:text-slate-400">
+                      {count} {count === 1 ? 'BDM' : 'BDMs'}
+                      {manages && report.updatedAt ? ` · Updated ${new Date(report.updatedAt).toLocaleDateString('en-IN')}` : ''}
+                    </span>
+                  </span>
+                  <StatusBadge status={status.label} tone={status.tone} size="sm" />
+                </button>
 
-          <AchievementSheet report={selected} showTotals={manages} />
-        </section>
+                {isOpen && (
+                  <div id={panelId} className="border-t border-slate-200 dark:border-slate-800 p-4 sm:p-5 space-y-4 animate-fadeIn">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <span className="text-xs text-slate-500 dark:text-slate-400">
+                        {manages && report.createdByName ? `Created by ${report.createdByName}` : ''}
+                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button icon={busy === 'download' ? Loader2 : Download} iconSpin={busy === 'download'} disabled={!!busy}
+                          onClick={() => run('download', () => downloadAchievementXlsx(report, manages), 'Excel file downloaded.', report.id)}>
+                          Download Excel
+                        </Button>
+                        {manages && !isLocked && (
+                          <Button icon={Pencil} disabled={!!busy} title={report.status === 'FINAL' ? 'Edit (moves the report back to Draft)' : 'Edit'}
+                            onClick={() => { setEditing(report); setIsModalOpen(true); }}>
+                            Edit
+                          </Button>
+                        )}
+                        {manages && report.status === 'DRAFT' && (
+                          <Button icon={busy === 'finalize' ? Loader2 : CheckCircle2} iconSpin={busy === 'finalize'} disabled={!!busy}
+                            onClick={() => run('finalize', () => api.finalizeAchievementReport(report.id!), 'Report marked as Final.', report.id)}>
+                            Finalize
+                          </Button>
+                        )}
+                        {isAdmin && report.status === 'FINAL' && (
+                          <Button variant="primary" icon={Lock} disabled={!!busy} onClick={() => setPendingConfirm({ kind: 'lock', report })}>
+                            Lock
+                          </Button>
+                        )}
+                        {isAdmin && !isLocked && (
+                          <Button icon={Trash2} aria-label={`Delete ${report.financialYear} report`} disabled={!!busy} onClick={() => setPendingConfirm({ kind: 'delete', report })} />
+                        )}
+                      </div>
+                    </div>
+
+                    <AchievementSheet report={report} showTotals={manages} />
+                  </div>
+                )}
+              </section>
+            );
+          })}
+        </div>
       )}
 
       {isModalOpen && (

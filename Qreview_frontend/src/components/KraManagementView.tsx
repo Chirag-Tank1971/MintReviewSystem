@@ -9,12 +9,13 @@ import {
   ChevronRight,
   Edit2,
   Library,
-  Scale,
   UserCheck,
   AlertTriangle,
 } from 'lucide-react';
 import { PageHeader } from './ui/PageHeader';
 import { Button } from './ui/Button';
+import { SegmentedControl } from './ui/SegmentedControl';
+import { cn } from '../utils/cn';
 
 interface KraManagementViewProps {
   templates: KraTemplate[];
@@ -28,6 +29,152 @@ interface KraManagementViewProps {
   onOpenLibrary: () => void;
   onQuickAssign: (employee: Employee) => void;
 }
+
+/** One template as a collapsible section: a short KRA table, with the full scoring rubric on request. */
+const TemplateSection: React.FC<{
+  tmpl: KraTemplate;
+  isOpen: boolean;
+  onToggle: () => void;
+  canManage: boolean;
+  onEdit: () => void;
+}> = ({ tmpl, isOpen, onToggle, canManage, onEdit }) => {
+  const [showRubric, setShowRubric] = useState(false);
+  const total = tmpl.items.reduce((sum, i) => sum + (Number(i.weight) || 0), 0);
+  const totalOk = Math.abs(total - 100) < 0.1;
+  const panelId = `kra-panel-${tmpl.id}`;
+  const updated = tmpl.updatedAt || tmpl.createdAt;
+  const subtitle = [
+    tmpl.employeeId ? tmpl.employeeName : tmpl.departmentName || 'General dept',
+    !tmpl.employeeId ? tmpl.designationName : null,
+    updated ? `Updated ${new Date(updated).toLocaleDateString('en-IN')}` : null,
+  ].filter(Boolean).join(' · ');
+
+  return (
+    <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={isOpen}
+        aria-controls={panelId}
+        className="w-full flex items-center gap-3 px-4 sm:px-5 py-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500"
+      >
+        <ChevronRight className={cn('w-4 h-4 shrink-0 text-slate-400 transition-transform', isOpen && 'rotate-90')} aria-hidden="true" />
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="text-sm font-semibold text-slate-900 dark:text-white">{tmpl.title || tmpl.name}</span>
+            {tmpl.employeeId ? (
+              <span
+                title={`Owned exclusively by ${tmpl.employeeName || 'this employee'}, not shared`}
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800"
+              >
+                <UserCheck className="w-3 h-3" aria-hidden="true" />
+                Employee-owned
+              </span>
+            ) : (
+              <span
+                title="A shared blueprint that can be assigned to several employees"
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
+              >
+                <Library className="w-3 h-3" aria-hidden="true" />
+                Shared library
+              </span>
+            )}
+          </span>
+          <span className="block mt-0.5 text-xs text-slate-500 dark:text-slate-400">{subtitle}</span>
+        </span>
+        <span
+          className={cn(
+            'shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold border tabular-nums',
+            totalOk
+              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-100 dark:border-emerald-800'
+              : 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+          )}
+        >
+          {tmpl.items.length} KRAs · {total}%
+        </span>
+      </button>
+
+      {isOpen && (
+        <div id={panelId} className="border-t border-slate-200 dark:border-slate-800 p-4 sm:p-5 space-y-4 animate-fadeIn">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-slate-500 dark:text-slate-400 max-w-prose">
+              {tmpl.employeeId
+                ? 'Exclusive scorecard, assigned to this employee alone and never shared.'
+                : 'Shared blueprint. It is copied into an employee-owned scorecard whenever it is assigned.'}
+            </p>
+            {canManage && (
+              <Button icon={Edit2} onClick={onEdit}>
+                Edit template
+              </Button>
+            )}
+          </div>
+
+          <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+            <table className="w-full min-w-[480px] text-xs">
+              <thead className="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                <tr>
+                  <th className="py-2.5 px-3 text-left font-medium w-10">#</th>
+                  <th className="py-2.5 px-3 text-left font-medium">Key result area</th>
+                  <th className="py-2.5 px-3 text-left font-medium">Target / SLA</th>
+                  <th className="py-2.5 px-3 text-right font-medium">Weight</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-800 dark:text-slate-200">
+                {tmpl.items.map((item, idx) => (
+                  <tr key={item.id || idx}>
+                    <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400 tabular-nums">{idx + 1}</td>
+                    <td className="py-2.5 px-3 font-medium">{item.title || item.kraName}</td>
+                    <td className="py-2.5 px-3 text-slate-600 dark:text-slate-400">{item.target || '—'}</td>
+                    <td className="py-2.5 px-3 text-right font-semibold tabular-nums">{item.weight}%</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className={cn('border-t-2 font-semibold', totalOk ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50' : 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50')}>
+                  <td className="py-2.5 px-3" colSpan={3}>
+                    <span className="text-slate-900 dark:text-white">Total weightage</span>
+                    {!totalOk && <span className="ml-2 font-normal text-amber-800 dark:text-amber-300">should add up to 100%</span>}
+                  </td>
+                  <td className="py-2.5 px-3 text-right tabular-nums text-slate-900 dark:text-white">{total}%</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowRubric((v) => !v)}
+              aria-expanded={showRubric}
+              className="text-xs font-medium text-indigo-700 dark:text-indigo-400 hover:underline cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            >
+              {showRubric ? 'Hide scoring rubric' : 'Show scoring rubric and descriptions'}
+            </button>
+            {showRubric && (
+              <ol className="mt-3 space-y-3">
+                {tmpl.items.map((item, idx) => (
+                  <li key={item.id || idx} className="rounded-lg border border-slate-200 dark:border-slate-800 p-3 space-y-1.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-xs font-semibold text-slate-900 dark:text-white">{idx + 1}. {item.title || item.kraName}</span>
+                      <span className="text-[11px] font-semibold tabular-nums text-slate-600 dark:text-slate-300">{item.weight}%</span>
+                    </div>
+                    {item.description && <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">{item.description}</p>}
+                    {item.measurementCriteria && (
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">1-5 rubric: </span>
+                        {item.measurementCriteria}
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+};
 
 export const KraManagementView: React.FC<KraManagementViewProps> = ({
   templates,
@@ -44,7 +191,8 @@ export const KraManagementView: React.FC<KraManagementViewProps> = ({
   const [activeSubTab, setActiveSubTab] = useState<'TEMPLATES' | 'LIBRARY' | 'ASSIGNMENTS'>('TEMPLATES');
   const [search, setSearch] = useState('');
   const [selectedDept, setSelectedDept] = useState('ALL');
-  const [selectedTemplate, setSelectedTemplate] = useState<KraTemplate | null>(templates[0] || null);
+  // null = the user hasn't touched it yet, so the first template shows open
+  const [openIds, setOpenIds] = useState<string[] | null>(null);
 
   const filteredTemplates = templates.filter((t) => {
     if (selectedDept !== 'ALL' && t.departmentId !== selectedDept) return false;
@@ -59,6 +207,11 @@ export const KraManagementView: React.FC<KraManagementViewProps> = ({
     }
     return true;
   });
+
+  const currentOpen = openIds ?? (filteredTemplates[0] ? [filteredTemplates[0].id] : []);
+  const toggleTemplate = (id: string) =>
+    setOpenIds(currentOpen.includes(id) ? currentOpen.filter((x) => x !== id) : [...currentOpen, id]);
+  const allOpen = filteredTemplates.length > 0 && filteredTemplates.every((tm) => currentOpen.includes(tm.id));
 
   const unassignedCount = employees.filter((e) => !e.currentKraTemplateId && e.status !== 'INACTIVE').length;
 
@@ -92,273 +245,75 @@ export const KraManagementView: React.FC<KraManagementViewProps> = ({
         }
       />
 
-      {/* Sub navigation pills */}
-      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
-        <button
-          onClick={() => setActiveSubTab('TEMPLATES')}
-          className={`inline-flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-            activeSubTab === 'TEMPLATES'
-              ? 'bg-indigo-600 text-white'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-          }`}
-        >
-          <FileText className="w-3.5 h-3.5" />
-          KRA Templates ({templates.length})
-        </button>
-
-        <button
-          onClick={() => setActiveSubTab('LIBRARY')}
-          className={`inline-flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-            activeSubTab === 'LIBRARY'
-              ? 'bg-indigo-600 text-white'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-          }`}
-        >
-          <Target className="w-3.5 h-3.5" />
-          Master Catalog ({kras.length})
-        </button>
-
-        <button
-          onClick={() => setActiveSubTab('ASSIGNMENTS')}
-          className={`inline-flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-            activeSubTab === 'ASSIGNMENTS'
-              ? 'bg-indigo-600 text-white'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-          }`}
-        >
-          <Users className="w-3.5 h-3.5" />
-          Employee Role Mapping ({employees.length})
-        </button>
-      </div>
+      {/* Sections: same bold tab style as the Sales page */}
+      <SegmentedControl
+        ariaLabel="KRA section"
+        strong
+        className="max-w-full overflow-x-auto"
+        value={activeSubTab}
+        onChange={setActiveSubTab}
+        options={[
+          { value: 'TEMPLATES', label: <><span className="sm:hidden">Templates</span><span className="hidden sm:inline">KRA Templates</span> ({templates.length})</>, icon: FileText },
+          { value: 'LIBRARY', label: <><span className="sm:hidden">Catalog</span><span className="hidden sm:inline">Master Catalog</span> ({kras.length})</>, icon: Target },
+          { value: 'ASSIGNMENTS', label: <><span className="sm:hidden">Role mapping</span><span className="hidden sm:inline">Employee Role Mapping</span> ({employees.length})</>, icon: Users },
+        ]}
+      />
 
       {/* VIEW: TEMPLATES */}
       {activeSubTab === 'TEMPLATES' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Templates list (Left 5 cols) */}
-          <div className="lg:col-span-5 space-y-4">
-            {/* Search & Department Filter */}
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <Search className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search templates..."
-                  className="w-full pl-8 pr-3 py-1.5 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <select
-                value={selectedDept}
-                onChange={(e) => setSelectedDept(e.target.value)}
-                className="text-xs px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 font-medium focus:outline-hidden cursor-pointer"
-              >
-                <option value="ALL" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">All depts</option>
-                {departments.map((d) => (
-                  <option key={d.id} value={d.id} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">
-                    {d.code}
-                  </option>
-                ))}
-              </select>
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative flex-1 min-w-[200px] max-w-sm">
+              <Search className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search templates..."
+                aria-label="Search templates"
+                className="w-full h-8 pl-8 pr-3 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-md text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 focus:border-indigo-600"
+              />
             </div>
 
-            {/* Template Cards List */}
-            <div className="space-y-2.5">
-              {filteredTemplates.length === 0 ? (
-                <div className="p-8 text-center text-xs text-slate-400 dark:text-slate-500 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
-                  No KRA templates found.
-                </div>
-              ) : (
-                filteredTemplates.map((tmpl) => {
-                  const isSelected = selectedTemplate?.id === tmpl.id;
-                  return (
-                    <div
-                      key={tmpl.id}
-                      onClick={() => setSelectedTemplate(tmpl)}
-                      className={`p-4 rounded-xl border transition-all cursor-pointer ${
-                        isSelected
-                          ? 'bg-blue-50/60 dark:bg-blue-950/30 border-blue-300 dark:border-blue-700 ring-1 ring-blue-300 dark:ring-blue-700'
-                          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <h4 className="text-xs font-bold text-slate-900 dark:text-white line-clamp-1">
-                              {tmpl.title || tmpl.name}
-                            </h4>
-                            {tmpl.employeeId ? (
-                              <span
-                                title={`Owned exclusively by ${tmpl.employeeName || 'this employee'} — not shared`}
-                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800 shrink-0"
-                              >
-                                <UserCheck className="w-2.5 h-2.5" />
-                                Employee-owned
-                              </span>
-                            ) : (
-                              <span
-                                title="A shared blueprint that can be assigned to multiple employees via Template Library mode"
-                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shrink-0"
-                              >
-                                <Library className="w-2.5 h-2.5" />
-                                Shared library
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-                              {tmpl.employeeId ? tmpl.employeeName : tmpl.departmentName || 'General Dept'}
-                            </span>
-                            {tmpl.designationName && !tmpl.employeeId && (
-                              <>
-                                <span className="text-slate-300 dark:text-slate-600">•</span>
-                                <span className="text-[11px] text-slate-600 dark:text-slate-300 font-medium">
-                                  {tmpl.designationName}
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        </div>
+            <select
+              value={selectedDept}
+              onChange={(e) => setSelectedDept(e.target.value)}
+              aria-label="Department"
+              className="h-8 text-xs px-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-md text-slate-800 dark:text-slate-200 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/25 cursor-pointer"
+            >
+              <option value="ALL">All depts</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.code}
+                </option>
+              ))}
+            </select>
 
-                        <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-800 shrink-0">
-                          {tmpl.items.length} KRAs • 100%
-                        </span>
-                      </div>
-
-                      <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-400 dark:text-slate-500">
-                        <span>Updated: {tmpl.updatedAt || tmpl.createdAt ? new Date(tmpl.updatedAt || tmpl.createdAt || '').toLocaleDateString() : '—'}</span>
-                        <span className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 font-semibold text-xs">
-                          Preview <ChevronRight className="w-3.5 h-3.5" />
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          {/* Template Detail / Preview Panel (Right 7 cols) */}
-          <div className="lg:col-span-7">
-            {selectedTemplate ? (
-              <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 space-y-6">
-                {/* Header */}
-                <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      {selectedTemplate.employeeId ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800">
-                          <UserCheck className="w-3 h-3" />
-                          Employee-Owned • {selectedTemplate.employeeName}
-                        </span>
-                      ) : (
-                        <>
-                          <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-800">
-                            {selectedTemplate.departmentName || 'Department Template'}
-                          </span>
-                          {selectedTemplate.designationName && (
-                            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-100 dark:border-purple-800">
-                              {selectedTemplate.designationName}
-                            </span>
-                          )}
-                        </>
-                      )}
-                    </div>
-                    <h3 className="text-base font-bold text-slate-900 dark:text-white mt-1.5">
-                      {selectedTemplate.title || selectedTemplate.name}
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      {selectedTemplate.employeeId
-                        ? 'Exclusive scorecard — assigned to this employee alone, never shared.'
-                        : 'Shared blueprint — cloned into an employee-owned copy whenever it is assigned.'}
-                    </p>
-                  </div>
-
-                  {canManage && (
-                    <button
-                      onClick={() => onOpenEditTemplate(selectedTemplate)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg transition-colors cursor-pointer"
-                    >
-                      <Edit2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                      Edit template
-                    </button>
-                  )}
-                </div>
-
-                {/* Weight summary card */}
-                <div className="bg-slate-50/80 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700/60 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-800 flex items-center justify-center text-emerald-700 dark:text-emerald-300 font-bold text-xs">
-                      100%
-                    </div>
-                    <div>
-                      <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                        Total weightage invariant verified
-                      </div>
-                      <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                        {selectedTemplate.items.length} structured KRAs with calibrated 1-5 scoring criteria
-                      </div>
-                    </div>
-                  </div>
-                  <Scale className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                </div>
-
-                {/* Items detail list */}
-                <div className="space-y-3">
-                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                    Key Result Areas ({selectedTemplate.items.length})
-                  </h4>
-
-                  <div className="space-y-3">
-                    {selectedTemplate.items.map((item, idx) => (
-                      <div
-                        key={item.id || idx}
-                        className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-850 space-y-2 hover:border-slate-300 dark:hover:border-slate-700 transition-colors"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 text-xs font-bold flex items-center justify-center shrink-0">
-                              {idx + 1}
-                            </span>
-                            <span className="text-xs font-bold text-slate-900 dark:text-white">
-                              {item.title || item.kraName}
-                            </span>
-                          </div>
-                          <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-800">
-                            {item.weight}%
-                          </span>
-                        </div>
-
-                        {item.description && (
-                          <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed pl-7">
-                            {item.description}
-                          </p>
-                        )}
-
-                        <div className="pl-7 pt-1.5 border-t border-slate-100/80 dark:border-slate-800 grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
-                          <div>
-                            <span className="font-semibold text-slate-700 dark:text-slate-300">Target / SLA: </span>
-                            <span className="text-slate-600 dark:text-slate-400">{item.target}</span>
-                          </div>
-                          {item.measurementCriteria && (
-                            <div>
-                              <span className="font-semibold text-slate-700 dark:text-slate-300">1-5 Rubric: </span>
-                              <span className="text-slate-500 dark:text-slate-400">{item.measurementCriteria}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="p-12 text-center text-xs text-slate-400 dark:text-slate-500 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
-                Select a template from the left list to view its complete scoring breakdown.
-              </div>
+            {filteredTemplates.length > 1 && (
+              <Button onClick={() => setOpenIds(allOpen ? [] : filteredTemplates.map((tm) => tm.id))}>
+                {allOpen ? 'Collapse all' : 'Expand all'}
+              </Button>
             )}
           </div>
+
+          {filteredTemplates.length === 0 ? (
+            <div className="p-12 text-center text-sm text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+              No KRA templates found.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredTemplates.map((tmpl) => (
+                <TemplateSection
+                  key={tmpl.id}
+                  tmpl={tmpl}
+                  isOpen={currentOpen.includes(tmpl.id)}
+                  onToggle={() => toggleTemplate(tmpl.id)}
+                  canManage={canManage}
+                  onEdit={() => onOpenEditTemplate(tmpl)}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 

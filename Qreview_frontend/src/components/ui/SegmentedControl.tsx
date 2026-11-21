@@ -32,7 +32,7 @@ export function SegmentedControl<T extends string>({ options, value, onChange, a
             onClick={() => onChange(v)}
             className={cn(
               'inline-flex items-center gap-1.5 h-7 px-3 text-xs font-medium rounded transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500',
-              strong && 'h-9 px-4 text-sm font-semibold',
+              strong && 'h-9 px-3 sm:px-4 text-sm font-semibold whitespace-nowrap',
               isActive
                 ? strong
                   ? 'bg-indigo-700 dark:bg-indigo-500 text-white shadow-sm'
