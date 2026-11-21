@@ -78,7 +78,6 @@ export const PerformanceImprovementPlansView: React.FC<PerformanceImprovementPla
       .getPipAnalytics()
       .then(setAnalytics)
       .catch(() => setAnalytics(null));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHrOrAdmin]);
 
   const loadPlans = async () => {
@@ -94,7 +93,6 @@ export const PerformanceImprovementPlansView: React.FC<PerformanceImprovementPla
 
   useEffect(() => {
     loadPlans();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Deep link from a notification's "Take Action" — once the list has loaded, auto-open the

@@ -40,7 +40,7 @@ kraRouter.get('/kras', async (req: AuthenticatedRequest, res: Response) => {
     }
 
     res.json(allKras);
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to fetch KRAs.' });
   }
 });
@@ -100,7 +100,7 @@ kraRouter.post(
     }
 
     res.status(201).json(newKra);
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to create KRA.' });
   }
 });
@@ -160,7 +160,7 @@ kraRouter.put(
     }
 
     res.json(updated);
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to update KRA.' });
   }
 });
@@ -204,7 +204,7 @@ kraRouter.get('/kra-templates', async (req: AuthenticatedRequest, res: Response)
     }
 
     res.json(allTemplates);
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to fetch KRA templates.' });
   }
 });
@@ -221,7 +221,7 @@ kraRouter.get('/kra-templates/:id', async (req: AuthenticatedRequest, res: Respo
       return res.status(404).json({ error: 'KRA template not found.' });
     }
     res.json(template);
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to fetch KRA template details.' });
   }
 });

@@ -53,6 +53,7 @@ export const AiPerformanceHub: React.FC<AiPerformanceHubProps> = ({ currentUser 
   // Load initial data
   useEffect(() => {
     loadBaseData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: re-runs only when the listed values change
   }, [currentUser]);
 
   const loadBaseData = async () => {

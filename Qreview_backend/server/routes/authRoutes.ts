@@ -386,7 +386,7 @@ authRouter.post('/logout', async (req: AuthenticatedRequest, res: Response) => {
         );
       }
     }
-  } catch (err) {
+  } catch {
     // quiet fallback
   }
   res.json({ success: true, message: 'Logged out successfully.' });
@@ -508,7 +508,7 @@ authRouter.post('/revoke-sessions', authenticateToken, async (req: Authenticated
       success: true,
       message: 'All active sessions have been revoked successfully across all devices.',
     });
-  } catch (err: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to revoke sessions.' });
   }
 });

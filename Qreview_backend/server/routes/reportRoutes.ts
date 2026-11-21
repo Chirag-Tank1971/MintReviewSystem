@@ -212,7 +212,7 @@ reportRouter.get('/reports/pending-overdue', async (req: AuthenticatedRequest, r
         criticalOverdueCount: reportData.filter((r) => r.daysAging > 30).length,
       },
     });
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to generate pending & overdue report.' });
   }
 });
@@ -318,7 +318,7 @@ reportRouter.get('/reports/employee-history', async (req: AuthenticatedRequest, 
     });
 
     res.json({ reportData });
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to generate employee history report.' });
   }
 });
@@ -388,7 +388,7 @@ reportRouter.get('/reports/department-performance', async (req: AuthenticatedReq
     reportData.sort((a, b) => b.averageScore - a.averageScore);
 
     res.json({ reportData });
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to generate department performance report.' });
   }
 });
@@ -465,7 +465,7 @@ reportRouter.get('/reports/manager-completion', async (req: AuthenticatedRequest
     reportData.sort((a, b) => b.completionRate - a.completionRate);
 
     res.json({ reportData });
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to generate manager completion report.' });
   }
 });
@@ -554,7 +554,7 @@ reportRouter.get('/reports/appraisal-due', async (req: AuthenticatedRequest, res
     });
 
     res.json({ reportData });
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to generate appraisal due report.' });
   }
 });
@@ -641,7 +641,7 @@ reportRouter.get('/reports/rating-trend', async (req: AuthenticatedRequest, res:
     });
 
     res.json({ trends });
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to generate rating trend report.' });
   }
 });
@@ -700,7 +700,7 @@ reportRouter.get('/reports/kra-performance', async (req: AuthenticatedRequest, r
     reportData.sort((a, b) => b.occurrencesCount - a.occurrencesCount);
 
     res.json({ reportData });
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to generate KRA performance report.' });
   }
 });
@@ -872,7 +872,7 @@ reportRouter.get('/reports/return-analytics', async (req: AuthenticatedRequest, 
       byKra,
       byReason,
     });
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to generate return analytics report.' });
   }
 });
@@ -896,7 +896,7 @@ reportRouter.get(
         .limit(maxItems)
         .toArray();
       res.json({ logs });
-    } catch (error: any) {
+    } catch {
       res.status(500).json({ error: 'Failed to fetch audit trail report.' });
     }
   }

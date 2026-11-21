@@ -58,11 +58,11 @@ function saveToDisk(collectionName: string, itemsMap: Map<string, any>) {
     saveDebounceTimer = setTimeout(() => {
       try {
         fs.writeFile(STORAGE_FILE_PATH, JSON.stringify(fullDiskStore), 'utf-8', () => {});
-      } catch (_e) {
+      } catch {
         // quiet fallback
       }
     }, 150);
-  } catch (err) {
+  } catch {
     // quiet fallback
   }
 }
@@ -373,7 +373,7 @@ export async function initDatabase(): Promise<void> {
     await memoryDb.employeeReviews.createIndex({ employeeId: 1, reviewPeriodId: 1 }, { unique: true });
     await memoryDb.appraisals.createIndex({ employeeId: 1, appraisalYear: 1 }, { unique: true });
     await memoryDb.users.createIndex({ email: 1 }, { unique: true });
-  } catch (_e) {
+  } catch {
     // ignore
   }
 }

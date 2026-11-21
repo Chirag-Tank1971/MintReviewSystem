@@ -169,6 +169,7 @@ export const AssignKraModal: React.FC<AssignKraModalProps> = ({
     return () => {
       isSubscribed = false;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: re-runs only when the listed values change
   }, [activeEmployee?.id, activeEmployee?.currentKraTemplateId, initialKras]);
 
   useEffect(() => {

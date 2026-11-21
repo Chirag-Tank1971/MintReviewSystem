@@ -56,6 +56,7 @@ export const BellCurveBudgetAnalytics: React.FC<BellCurveBudgetAnalyticsProps> =
 
   useEffect(() => {
     loadAnalytics();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: re-runs only when the listed values change
   }, [selectedCycleId, selectedYear]);
 
   const currencySymbol = '₹';

@@ -163,6 +163,7 @@ export const ReportsCenterView: React.FC<ReportsCenterViewProps> = ({ department
 
   useEffect(() => {
     fetchReportData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: re-runs only when the listed values change
   }, [activeReport, selectedDept, selectedCycle, selectedStatus, selectedYear, selectedAuditModule, selectedPeriod]);
 
   // Export to CSV generator

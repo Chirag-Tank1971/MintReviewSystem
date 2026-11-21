@@ -122,7 +122,7 @@ salesChampsRouter.get(
         }
       }
       res.json(doc);
-    } catch (err: any) {
+    } catch {
       res.status(500).json({ error: 'Failed to fetch report.' });
     }
   }
@@ -285,7 +285,7 @@ salesChampsRouter.post(
       const updated = await col.findOne({ id: req.params.id });
       await logChampsAudit(req, 'SALES_CHAMPS_FINALIZE', req.params.id, existing, updated);
       res.json(updated);
-    } catch (err: any) {
+    } catch {
       res.status(500).json({ error: 'Failed to finalize report.' });
     }
   }
@@ -329,7 +329,7 @@ salesChampsRouter.post(
         createdAt: now,
       });
       res.json(updated);
-    } catch (err: any) {
+    } catch {
       res.status(500).json({ error: 'Failed to lock report.' });
     }
   }
@@ -352,7 +352,7 @@ salesChampsRouter.delete(
       await col.deleteOne({ id: req.params.id });
       await logChampsAudit(req, 'SALES_CHAMPS_DELETE', req.params.id, existing, null);
       res.json({ success: true });
-    } catch (err: any) {
+    } catch {
       res.status(500).json({ error: 'Failed to delete report.' });
     }
   }

@@ -90,6 +90,7 @@ export const NotificationsCenterView: React.FC<NotificationsCenterViewProps> = (
     if (isAdminOrHr) {
       fetchEmailLogs();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: re-runs only when the listed values change
   }, [currentUser]);
 
   // Keep this page's own list in sync in real time: new notifications can arrive from
@@ -134,7 +135,6 @@ export const NotificationsCenterView: React.FC<NotificationsCenterViewProps> = (
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('notifications-updated', handleNotificationsUpdated);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleMarkAsRead = async (id: string, e?: React.MouseEvent) => {

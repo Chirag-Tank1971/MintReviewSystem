@@ -303,6 +303,7 @@ export const QuarterlyReviewView: React.FC<QuarterlyReviewViewProps> = ({
   // Load Review Periods on Mount or when currentUser changes
   useEffect(() => {
     loadReviewPeriods();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: re-runs only when the listed values change
   }, [currentUser]);
 
   const loadReviewPeriods = async () => {
@@ -340,6 +341,7 @@ export const QuarterlyReviewView: React.FC<QuarterlyReviewViewProps> = ({
     if (selectedPeriodId) {
       loadReviewsAndStats(selectedPeriodId);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: re-runs only when the listed values change
   }, [selectedPeriodId, filterDepartmentId, filterStatus, filterManagerId, myReportsOnly, pipOnly]);
 
   const loadReviewsAndStats = async (periodIdToFetch?: string) => {

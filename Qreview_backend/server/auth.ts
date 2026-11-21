@@ -216,7 +216,7 @@ export async function verifyRefreshToken(
       tokenVersion: currentVersion,
       impersonatorId: typeof decoded.impersonatorId === 'string' ? decoded.impersonatorId : undefined,
     };
-  } catch (err) {
+  } catch {
     return null;
   }
 }
@@ -304,7 +304,7 @@ export async function verifyTokenString(token: string): Promise<User | null> {
     }
     if (!user || user.active === false) return null;
     return user;
-  } catch (err) {
+  } catch {
     return null;
   }
 }
@@ -529,7 +529,7 @@ export function authorizeEmployeeAccess(paramName: string = 'id') {
       }
 
       return res.status(403).json({ error: 'Forbidden: Insufficient privileges.' });
-    } catch (err: any) {
+    } catch {
       return res.status(500).json({ error: 'Employee authorization verification failed.' });
     }
   };
@@ -790,7 +790,7 @@ export function authorizeReviewAccess(
       }
 
       return res.status(403).json({ error: 'Forbidden: Unauthorized action on review.' });
-    } catch (err: any) {
+    } catch {
       return res.status(500).json({ error: 'Review authorization verification failed.' });
     }
   };

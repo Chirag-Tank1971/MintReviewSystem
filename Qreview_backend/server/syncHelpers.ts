@@ -80,7 +80,7 @@ export async function syncEmployeeAppraisalsAndReviews(emp: Employee) {
               period,
               source: 'AUTOMATIC',
             });
-          } catch (_createErr) {
+          } catch {
             // quiet fallback if already created concurrently
           }
         }

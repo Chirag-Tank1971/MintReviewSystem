@@ -214,6 +214,7 @@ export const AppraisalManagementView: React.FC<AppraisalManagementViewProps> = (
 
   useEffect(() => {
     loadData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: re-runs only when the listed values change
   }, [selectedCycleId, selectedYear, selectedDepartmentId, selectedStatus, searchQuery, onlyMine]);
 
   const currencySymbol = '₹';

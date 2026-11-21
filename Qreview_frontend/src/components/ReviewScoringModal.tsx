@@ -191,6 +191,7 @@ export const ReviewScoringModal: React.FC<ReviewScoringModalProps> = ({
         setWizardStep(2);
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: re-runs only when the listed values change
   }, [review]);
 
   // Real-time calculated live weighted score

@@ -180,7 +180,7 @@ achievementRouter.post('/achievement-reports/:id/finalize', requireRoles('SUPER_
     const updated = await col.findOne({ id: existing.id });
     await audit(req, 'ACHIEVEMENT_FINALIZE', existing.id, existing, updated);
     res.json(updated);
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: 'Failed to finalize achievement report.' });
   }
 });
@@ -235,7 +235,7 @@ achievementRouter.delete('/achievement-reports/:id', requireRoles('SUPER_ADMIN')
     await col.deleteOne({ id: existing.id });
     await audit(req, 'ACHIEVEMENT_DELETE', existing.id, existing, null);
     res.json({ success: true });
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: 'Failed to delete achievement report.' });
   }
 });

@@ -118,7 +118,7 @@ mastersRouter.get('/departments', async (req: AuthenticatedRequest, res: Respons
     const deptCol = getDbCollection('departments');
     const departments = await (await deptCol.find({})).toArray();
     res.json(departments);
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to fetch departments.' });
   }
 });
@@ -176,7 +176,7 @@ mastersRouter.post('/departments', requireRoles('SUPER_ADMIN', 'HR'), async (req
     }
 
     res.status(201).json(newDept);
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to create department.' });
   }
 });
@@ -226,7 +226,7 @@ mastersRouter.put('/departments/:id', requireRoles('SUPER_ADMIN', 'HR'), async (
     }
 
     res.json(updated);
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to update department.' });
   }
 });
@@ -284,7 +284,7 @@ mastersRouter.delete('/departments/:id', requireRoles('SUPER_ADMIN', 'HR'), asyn
       success: true,
       message: `Department "${dept.name}" (${dept.code}) was deleted from the database successfully.`
     });
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to delete department from database.' });
   }
 });
@@ -301,7 +301,7 @@ mastersRouter.get('/designations', async (req: AuthenticatedRequest, res: Respon
     const desCol = getDbCollection('designations');
     const designations = await (await desCol.find({})).toArray();
     res.json(designations);
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to fetch designations.' });
   }
 });
@@ -349,7 +349,7 @@ mastersRouter.post('/designations', requireRoles('SUPER_ADMIN', 'HR'), async (re
     }
 
     res.status(201).json(newDes);
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to create designation.' });
   }
 });
@@ -403,7 +403,7 @@ mastersRouter.delete('/designations/:id', requireRoles('SUPER_ADMIN', 'HR'), asy
       success: true,
       message: `Designation "${des.name}" was deleted from the database successfully.`
     });
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to delete designation from database.' });
   }
 });
@@ -501,7 +501,7 @@ mastersRouter.get('/locations', async (req: AuthenticatedRequest, res: Response)
     result.sort((a, b) => b.employeeCount - a.employeeCount || a.name.localeCompare(b.name));
 
     res.json(result);
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to fetch locations.' });
   }
 });
@@ -544,7 +544,7 @@ mastersRouter.post('/locations', requireRoles('SUPER_ADMIN', 'HR'), async (req: 
       );
     }
     res.status(201).json({ success: true, message: `Location "${locName}" added successfully.`, location: newDoc });
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to create location.' });
   }
 });
@@ -600,7 +600,7 @@ mastersRouter.delete('/locations/:name', requireRoles('SUPER_ADMIN', 'HR'), asyn
       success: true,
       message: `Location "${locName}" was deleted successfully.`
     });
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to delete location.' });
   }
 });
@@ -618,7 +618,7 @@ mastersRouter.get('/cycles', async (req: AuthenticatedRequest, res: Response) =>
     const filter = req.query.includeInactive === 'true' ? {} : { active: { $ne: false } };
     const cycles = await (await cyclesCol.find(filter)).toArray();
     res.json(cycles);
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to fetch appraisal cycles.' });
   }
 });
@@ -668,7 +668,7 @@ mastersRouter.put('/cycles/:id', requireRoles('SUPER_ADMIN', 'HR'), async (req: 
     }
 
     res.json(updated);
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to update appraisal cycle.' });
   }
 });
@@ -758,7 +758,7 @@ mastersRouter.get('/employees', async (req: AuthenticatedRequest, res: Response)
     }
 
     res.json(allEmployees);
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to fetch employee records.' });
   }
 });
@@ -786,7 +786,7 @@ mastersRouter.get('/employees/:id', authorizeEmployeeAccess('id'), async (req: A
       employee.userId = user.id;
     }
     res.json(employee);
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to fetch employee details.' });
   }
 });
@@ -2295,7 +2295,7 @@ mastersRouter.delete('/notifications/:id', async (req: AuthenticatedRequest, res
     const notifsCol = getDbCollection('notifications');
     await notifsCol.deleteMany({ $or: [{ id }, { _id: id }] });
     res.json({ success: true, id, message: 'Notification removed.' });
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to delete notification.' });
   }
 });
@@ -2310,7 +2310,7 @@ mastersRouter.post('/notifications/:id/complete', async (req: AuthenticatedReque
     const notifsCol = getDbCollection('notifications');
     await notifsCol.deleteMany({ $or: [{ id }, { _id: id }] });
     res.json({ success: true, id, message: 'Target task completed. Notification automatically removed.' });
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to complete notification.' });
   }
 });
@@ -2325,7 +2325,7 @@ mastersRouter.put('/notifications/:id/read', async (req: AuthenticatedRequest, r
     const notifsCol = getDbCollection('notifications');
     await notifsCol.updateMany({ $or: [{ id }, { _id: id }] }, { $set: { isRead: true } });
     res.json({ success: true, id });
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to mark notification as read.' });
   }
 });
@@ -2356,7 +2356,7 @@ mastersRouter.put('/notifications/read-all', async (req: AuthenticatedRequest, r
     }
 
     res.json({ success: true });
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to mark all notifications as read.' });
   }
 });

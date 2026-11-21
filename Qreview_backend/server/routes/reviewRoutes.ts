@@ -98,7 +98,7 @@ reviewRouter.get('/review-periods/current', async (_req: AuthenticatedRequest, r
       return res.status(404).json({ error: 'No review periods found.' });
     }
     res.json(current);
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to fetch current review period.' });
   }
 });
@@ -116,7 +116,7 @@ reviewRouter.get('/review-periods', async (_req: AuthenticatedRequest, res: Resp
       return b.quarter - a.quarter;
     });
     res.json(periods);
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to fetch review periods.' });
   }
 });
@@ -165,7 +165,7 @@ reviewRouter.post(
       }
 
       res.status(201).json(newPeriod);
-    } catch (error: any) {
+    } catch {
       res.status(500).json({ error: 'Failed to create review period.' });
     }
   }
@@ -217,7 +217,7 @@ reviewRouter.put(
       }
 
       res.json(updated);
-    } catch (error: any) {
+    } catch {
       res.status(500).json({ error: 'Failed to update review period.' });
     }
   }
@@ -400,7 +400,7 @@ reviewRouter.get('/reviews/stats', async (req: AuthenticatedRequest, res: Respon
     };
 
     res.json(stats);
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to calculate review statistics.' });
   }
 });
@@ -583,7 +583,7 @@ reviewRouter.get(
       const reviews: EmployeeReview[] = await (await reviewCol.find(query)).toArray();
       reviews.sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
       res.json(reviews.map(toListRow));
-    } catch (error: any) {
+    } catch {
       res.status(500).json({ error: 'Failed to fetch pending reviews.' });
     }
   }
@@ -597,7 +597,7 @@ reviewRouter.get('/reviews/return-policy', async (_req: AuthenticatedRequest, re
   try {
     const policy = await getReturnPolicy();
     res.json({ ...policy, reasonTemplates: RETURN_REASON_TEMPLATES });
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to load return policy.' });
   }
 });
@@ -642,7 +642,7 @@ reviewRouter.get(
       if (!canDraftReturn(req, req.review!)) return res.json({ draft: null });
       const draft = await getReturnDraft(req.params.id, req.user!.id);
       res.json({ draft, returnCount: getReturnCount(req.review!) });
-    } catch (error: any) {
+    } catch {
       res.status(500).json({ error: 'Failed to load return draft.' });
     }
   }
@@ -658,7 +658,7 @@ reviewRouter.put(
       }
       const draft = await saveReturnDraft(req.review!, req.user!.id, req.body || {});
       res.json({ draft });
-    } catch (error: any) {
+    } catch {
       res.status(500).json({ error: 'Failed to save return draft.' });
     }
   }
@@ -671,7 +671,7 @@ reviewRouter.delete(
     try {
       await deleteReturnDraft(req.params.id, req.user!.id);
       res.json({ success: true });
-    } catch (error: any) {
+    } catch {
       res.status(500).json({ error: 'Failed to discard return draft.' });
     }
   }
@@ -691,7 +691,7 @@ reviewRouter.get('/reviews/:id', authorizeReviewAccess('read'), async (req: Auth
       ...review,
       employeeStatus: empRecord?.status || review.employeeStatus || 'ACTIVE',
     });
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to fetch review details.' });
   }
 });
@@ -1707,7 +1707,7 @@ reviewRouter.put(
       console.log(`[Review] Status transition: Review ${id} ("${existing.employeeName}"): ${existing.status} -> ${effectiveStatus} by "${req.user?.name}" [${req.user?.role}]`);
 
       res.json(updatedReview);
-    } catch (error: any) {
+    } catch {
       res.status(500).json({ error: 'Failed to update review status.' });
     }
   }
@@ -2197,7 +2197,7 @@ reviewRouter.get(
         totalReviews: historyWithComparisons.length,
         history: historyWithComparisons,
       });
-    } catch (error: any) {
+    } catch {
       res.status(500).json({ error: 'Failed to fetch review history.' });
     }
   }

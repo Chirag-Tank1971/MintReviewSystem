@@ -225,6 +225,7 @@ export const ManagementDashboardView: React.FC<ManagementDashboardViewProps> = (
   useEffect(() => {
     fetchDashboardSummary();
     fetchDepartmentPerformance();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: re-runs only when the listed values change
   }, [selectedPeriodId]);
 
   // Tab-driven lazy data fetches
@@ -240,6 +241,7 @@ export const ManagementDashboardView: React.FC<ManagementDashboardViewProps> = (
     } else if (activeTab === 'workforceRisk') {
       fetchWorkforceRisk();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: re-runs only when the listed values change
   }, [activeTab, selectedPeriodId, selectedYear, deptSortBy, deptSortOrder, searchDeptQuery, talentSubTab]);
 
   // Open Employee Dossier Modal

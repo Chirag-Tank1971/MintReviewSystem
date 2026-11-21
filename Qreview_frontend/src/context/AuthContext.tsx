@@ -103,7 +103,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setEmployeeProfile(data.employeeProfile || null);
       setPermissions(data.permissions || []);
       scheduleRefresh(storedToken);
-    } catch (err) {
+    } catch {
       console.warn('Invalid token, resetting session...');
       localStorage.removeItem('review_app_token');
       setToken(null);
@@ -133,6 +133,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
       window.removeEventListener('auth:session_expired', handleSessionExpired);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: re-runs only when the listed values change
   }, []);
 
   const login = async (email: string, password: string) => {

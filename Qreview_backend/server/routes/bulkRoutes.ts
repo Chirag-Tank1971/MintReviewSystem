@@ -1496,7 +1496,7 @@ bulkRouter.get('/history', async (_req: AuthenticatedRequest, res: Response) => 
 
     history.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     res.json(history);
-  } catch (error: any) {
+  } catch {
     res.status(500).json({ error: 'Failed to retrieve bulk import history.' });
   }
 });

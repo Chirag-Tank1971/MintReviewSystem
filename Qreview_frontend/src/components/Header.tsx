@@ -75,6 +75,7 @@ export const Header: React.FC<HeaderProps> = ({
       }, 700);
       return () => clearTimeout(loginTimer);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: re-runs only when the listed values change
   }, [user?.id, user?.email]);
 
   // 2. Ring immediately when unread count increases (new notification received)

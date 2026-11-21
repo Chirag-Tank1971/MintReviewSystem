@@ -558,6 +558,7 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
     setRehireTarget(null);
     setError(null);
     setCreatedResponse(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: re-runs only when the listed values change
   }, [employeeToEdit, initialRehire, isOpen, departments, cycles, reviewPeriods, allEmployees]);
 
   // Rehire handler to switch modal into rehire mode
@@ -633,6 +634,7 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
     } else {
       setFilteredDesignations(designations);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: re-runs only when the listed values change
   }, [departmentId, designations]);
 
   // Helper to determine if target employee being edited/created is an HOD or Manager

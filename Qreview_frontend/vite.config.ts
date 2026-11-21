@@ -72,6 +72,28 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, 'src'),
       },
     },
+    build: {
+      // The only chunk above 500 kB is the styled-Excel library, which loads only on "Download Excel"
+      chunkSizeWarningLimit: 900,
+      rollupOptions: {
+        output: {
+          // Split big libraries into their own files so they cache across deploys and
+          // pages that do not use them (e.g. charts) do not pay for them.
+          // Vite hands over forward-slash module ids on every OS.
+          manualChunks(id: string) {
+            // Rollup's shared CommonJS helper is needed by the entry, so keep it out of the charts chunk
+            if (id.includes('commonjsHelpers')) return 'vendor-react';
+            if (!id.includes('node_modules')) return undefined;
+            if (/\/node_modules\/(recharts|d3-[^/]+|victory-vendor|decimal\.js-light|internmap)\//.test(id)) return 'vendor-charts';
+            if (/\/node_modules\/(framer-motion|motion-[^/]+)\//.test(id)) return 'vendor-motion';
+            if (id.includes('/node_modules/lucide-react/')) return 'vendor-icons';
+            // clsx and tailwind-merge feed the entry's cn() helper (recharts also imports clsx)
+            if (/\/node_modules\/(react|react-dom|scheduler|clsx|tailwind-merge)\//.test(id)) return 'vendor-react';
+            return undefined;
+          },
+        },
+      },
+    },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.

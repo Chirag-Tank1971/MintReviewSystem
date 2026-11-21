@@ -467,7 +467,7 @@ export async function createQuarterlyReview(options: CreateQuarterlyReviewOption
         );
       }
     }
-  } catch (_notifErr) {
+  } catch {
     // quiet fallback for notifications
   }
 
@@ -485,7 +485,7 @@ export async function createQuarterlyReview(options: CreateQuarterlyReviewOption
         JSON.stringify({ status: 'ASSIGNED', reviewPeriodId: period.id, creationSource: 'MANUAL' }),
         `Manual review initiated for ${emp.name} (${emp.employeeCode}). Reason: ${manualOverrideReason || 'Not provided'}. Tenure: ${tenureDays} days.`
       );
-    } catch (_auditErr) {
+    } catch {
       // quiet fallback for audit
     }
   }

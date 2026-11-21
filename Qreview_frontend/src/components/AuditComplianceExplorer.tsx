@@ -117,6 +117,7 @@ export const AuditComplianceExplorer: React.FC<AuditComplianceExplorerProps> = (
 
   useEffect(() => {
     loadData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: re-runs only when the listed values change
   }, [currentUser?.role]);
 
   // Load employee timeline dynamically whenever selected employee changes
